@@ -1,0 +1,39 @@
+.coin-container{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* กำหนดขนาดและลักษณะของโลโก้ */
+.aura-logo-svg {
+  width: 128px;
+  height: 128px;
+  display: inline-block;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.4));
+
+  /* สั่งให้เริ่มการเคลื่อนไหว */
+  animation: float 3s ease-in-out infinite;
+  will-change: transform, filter;
+}
+
+/* คำสั่งสร้างการเคลื่อนไหวแบบลอยขึ้น-ลง */
+@keyframes float {
+  0% {
+    transform: translateY(0);
+    filter: drop-shadow(0 5px 5px rgba(0,0,0,0.30));
+  }
+  50% {
+    transform: translateY(-15px); /* ลอยขึ้น 15 พิกเซล */
+    filter: drop-shadow(0 20px 10px rgba(0,0,0,0.10));
+  }
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 5px 5px rgba(0,0,0,0.30));
+  }
+}
+
+/* ลดการเคลื่อนไหวถ้าผู้ใช้ตั้งค่า Reduce Motion */
+@media (prefers-reduced-motion: reduce) {
+  .aura-logo { animation: none; }
+}

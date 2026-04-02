@@ -1,0 +1,19 @@
+{
+  "name": "aura-guardian-node",
+  "version": "1.0.0",
+  "main": "dist/watcher.js",
+  "scripts": {
+    "start": "ts-node src/watcher.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "ethers": "^6.8.0",
+    "dotenv": "^16.3.1",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.1"
+  }
+}

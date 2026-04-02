@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura L4 - Nexus AI Interface</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #05070a;
+            --accent-color: #00f2ff;
+            --secondary-accent: #7000ff;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-color: #e0e6ed;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(112, 0, 255, 0.05) 0%, transparent 40%);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .nexus-container {
+            width: 900px;
+            height: 650px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Sidebar Stats */
+        .sidebar {
+            width: 260px;
+            border-right: 1px solid var(--glass-border);
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(to right, var(--accent-color), var(--secondary-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 16px;
+        }
+
+        .stat-label { font-size: 11px; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 16px; font-weight: 600; margin-top: 5px; color: var(--accent-color); }
+
+        .status-dot {
+            width: 8px; height: 8px; background: #00ff88;
+            border-radius: 50%; display: inline-block;
+            box-shadow: 0 0 10px #00ff88;
+            margin-right: 8px;
+        }
+
+        /* Chat Window */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 14px 20px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.5;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
+
+        .message.ai {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, rgba(0, 242, 255, 0.1), rgba(112, 0, 255, 0.1));
+            border-bottom-right-radius: 4px;
+            border: 1px solid rgba(0, 242, 255, 0.2);
+        }
+
+        .blockchain-tag {
+            font-size: 10px;
+            background: rgba(0, 242, 255, 0.1);
+            color: var(--accent-color);
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 8px;
+            display: inline-block;
+            border: 1px solid rgba(0, 242, 255, 0.2);
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 25px 30px;
+            border-top: 1px solid var(--glass-border);
+            display: flex;
+            gap: 15px;
+        }
+
+        input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 14px 20px;
+            color: white;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        input:focus { border-color: var(--accent-color); box-shadow: 0 0 15px rgba(0, 242, 255, 0.1); }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), var(--secondary-accent));
+            border: none;
+            color: white;
+            padding: 0 25px;
+            border-radius: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover { transform: scale(1.02); }
+        button:active { transform: scale(0.98); }
+
+    </style>
+</head>
+<body>
+
+    <div class="nexus-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">🧬 Aura Nexus</div>
+            
+            <div class="stat-card">
+                <div class="stat-label"><span class="status-dot"></span> Layer 3 Status</div>
+                <div class="stat-value" id="l3-status">Connected · High Speed</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">AI Intelligence</div>
+                <div class="stat-value">Aura-Native L4</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Integrity Mode</div>
+                <div class="stat-value" style="color: #00ff88;">Real-time Execution</div>
+            </div>
+        </div>
+
+        <!-- Main Chat -->
+        <div class="chat-main">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message ai">
+                    สวัสดีครับ! ผมคือ Aura Nexus AI Controller คุณต้องการให้ผมจัดการอะไรบนเครือข่าย Aura วันนี้ครับ? 🛡️✨
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="user-input" placeholder="พิมพ์คำสั่ง เช่น 'โอน 50 ให้ Bob บน L3'..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">ส่งคำสั่ง</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+
+        function appendMessage(text, role, meta = null) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            msgDiv.innerText = text;
+
+            if (meta) {
+                const tag = document.createElement('div');
+                tag.className = 'blockchain-tag';
+                tag.innerText = `⛓️ ${meta}`;
+                msgDiv.appendChild(tag);
+            }
+
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const prompt = userInput.value.trim();
+            if (!prompt) return;
+
+            appendMessage(prompt, 'user');
+            userInput.value = '';
+
+            // AI Loading
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'message ai';
+            loadingMsg.innerText = '🛰️ กำลังประมวลผลคำสั่งจริงบน Aura...';
+            chatBox.appendChild(loadingMsg);
+
+            try {
+                const response = await fetch('http://127.0.0.1:8081/ai/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: 'nrkeA6qxczkzsCsSt5eTvhA8GTSg183xjTW2Ro65PAjoMfE1TB', prompt: prompt })
+                });
+
+                const data = await response.json();
+                chatBox.removeChild(loadingMsg);
+
+                if (data.ok) {
+                    let responseText = `ดำเนินการเรียบร้อยครับ: ${data.explain}`;
+                    let metaInfo = data.results[0]?.status === 'CHAIN_CONFIRMED' ? 'Confirmed on Aura L3' : 'Plan Created';
+                    
+                    if (data.results[0]?.result) {
+                        responseText += ` (TX ID: ${JSON.stringify(data.results[0].result)})`;
+                    }
+
+                    appendMessage(responseText, 'ai', metaInfo);
+                } else {
+                    appendMessage(`ขออภัยครับ: ${data.error || 'การเชื่อมต่อขัดข้อง'}`, 'ai');
+                }
+            } catch (err) {
+                chatBox.removeChild(loadingMsg);
+                appendMessage("❌ ไม่สามารถเชื่อมต่อกับ Aura L4 Service ได้ (กรุณารัน Python Server ก่อน)", "ai");
+            }
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+    </script>
+</body>
+</html>
