@@ -27,6 +27,20 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Aura Monorepo Specifics
+aura-l3-contracts/artifacts/
+aura-l3-contracts/cache/
+aura-l3-contracts/typechain-types/
+aura-guardian-node/dist/
+aura-cli/dist/
+
+# Recursive Ignores
+**/node_modules/
+**/.env
+**/.env.*
+**/dist/
+**/build/
+
 # OS specific files
 .DS_Store
 Thumbs.db
