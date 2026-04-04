@@ -204,7 +204,15 @@ create table public.daily_distribution_history (
 
 -- 11) RPC Function for Heartbeat Increment
 create or replace function public.heartbeat_increment(p_address text, p_day date, p_minutes integer) returns void as $$
+declare
+  v_last_ping timestamptz;
 begin
+  -- Anti-Sybil Rate Limiting: Prevent rapid pings (less than 45 seconds gap)
+  select last_ping_at into v_last_ping from public.daily_uptime_logs where address = p_address and date_key = p_day;
+  if v_last_ping is not null and now() - v_last_ping < interval '45 seconds' then
+    return; -- Silent drop, user is pinging too fast
+  end if;
+
   loop
     -- try update
     update public.daily_uptime_logs set uptime_minutes = uptime_minutes + p_minutes, last_ping_at = now()
