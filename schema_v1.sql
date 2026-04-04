@@ -258,4 +258,99 @@ alter table public.daily_uptime_logs
 alter table public.daily_uptime_logs
   add constraint max_daily_uptime check (uptime_minutes <= 1440);
 
+-- ================================================================
+-- AURA L3 AI CONSTITUTION — GOVERNANCE SCHEMA
+-- Karma = floor(total_uptime_minutes / 60) ← 1 hr online = 1 Karma
+-- Mock Ledger on Supabase until Blockchain deployment
+-- ================================================================
+
+-- 15) Citizens
+create table if not exists public.citizens (
+  address text primary key,
+  karma_score integer not null default 1,
+  registered_at timestamptz not null default now()
+);
+
+-- 16) Proposals
+create table if not exists public.proposals (
+  id bigserial primary key,
+  proposer_address text not null references public.citizens(address),
+  title text not null,
+  body text not null,
+  deadline timestamptz not null,
+  yes_votes integer not null default 0,
+  no_votes integer not null default 0,
+  abstain_votes integer not null default 0,
+  status text not null default 'OPEN' check (status in ('OPEN','APPROVED','EXECUTED','REJECTED')),
+  policy_hash text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_proposals_status on public.proposals(status);
+
+-- 17) Votes
+create table if not exists public.votes (
+  id bigserial primary key,
+  proposal_id bigint not null references public.proposals(id),
+  voter_address text not null references public.citizens(address),
+  choice text not null check (choice in ('YES','NO','ABSTAIN')),
+  weight integer not null default 1,
+  voted_at timestamptz not null default now(),
+  unique(proposal_id, voter_address) -- ห้ามโหวตซ้ำ
+);
+
+-- 18) RPC: Register Citizen + Sync Karma from Uptime
+create or replace function public.register_citizen(p_address text) returns void as $$
+declare
+  v_karma integer;
+begin
+  -- คำนวณ karma จากชั่วโมงออนไลน์รวมทุกวัน (1 ชม. = 1 Karma)
+  select coalesce(floor(sum(uptime_minutes) / 60), 1)::integer
+    into v_karma
+    from public.daily_uptime_logs
+    where address = p_address;
+
+  insert into public.citizens(address, karma_score)
+    values (p_address, greatest(v_karma, 1))
+    on conflict (address) do update
+      set karma_score = greatest(v_karma, 1);
+end;
+$$ language plpgsql;
+
+-- 19) RPC: Cast Vote (atomic — prevents double vote)
+create or replace function public.cast_vote(
+  p_proposal_id bigint,
+  p_voter text,
+  p_choice text
+) returns void as $$
+declare
+  v_weight integer;
+  v_deadline timestamptz;
+  v_status text;
+begin
+  -- ตรวจสอบ Proposal
+  select deadline, status into v_deadline, v_status from public.proposals where id = p_proposal_id;
+  if v_deadline is null then raise exception 'Proposal not found'; end if;
+  if v_status != 'OPEN' then raise exception 'Voting is closed'; end if;
+  if now() > v_deadline then raise exception 'Deadline passed'; end if;
+
+  -- ดึง Karma Weight
+  select karma_score into v_weight from public.citizens where address = p_voter;
+  if v_weight is null then raise exception 'Not a citizen'; end if;
+
+  -- บันทึก Vote
+  insert into public.votes(proposal_id, voter_address, choice, weight)
+    values (p_proposal_id, p_voter, p_choice, v_weight);
+
+  -- อัปเดตยอดโหวตใน Proposal
+  if p_choice = 'YES' then
+    update public.proposals set yes_votes = yes_votes + v_weight where id = p_proposal_id;
+  elsif p_choice = 'NO' then
+    update public.proposals set no_votes = no_votes + v_weight where id = p_proposal_id;
+  else
+    update public.proposals set abstain_votes = abstain_votes + v_weight where id = p_proposal_id;
+  end if;
+end;
+$$ language plpgsql;
+
 commit;
