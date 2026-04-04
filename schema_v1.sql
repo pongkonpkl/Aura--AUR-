@@ -182,4 +182,46 @@ begin
 end;
 $$;
 
+-- 9) Daily Uptime Tracking (Heartbeats)
+create table public.daily_uptime_logs (
+  date_key date not null default current_date,
+  address text not null references public.aura_accounts(address) on delete cascade,
+  uptime_minutes int not null default 0,
+  last_ping_at timestamptz not null default now(),
+  primary key (date_key, address)
+);
+
+create index if not exists daily_uptime_date_idx on public.daily_uptime_logs (date_key);
+
+-- 10) Distribution History (Eternity Pool Tracker)
+create table public.daily_distribution_history (
+  distribution_date date primary key default current_date,
+  total_recipients int not null,
+  total_shares int not null,
+  transaction_hash text not null,
+  distributed_at timestamptz not null default now()
+);
+
+-- 11) RPC Function for Heartbeat Increment
+create or replace function public.heartbeat_increment(p_address text, p_day date, p_minutes integer) returns void as $$
+begin
+  loop
+    -- try update
+    update public.daily_uptime_logs set uptime_minutes = uptime_minutes + p_minutes, last_ping_at = now()
+      where address = p_address and date_key = p_day;
+    if found then
+      return;
+    end if;
+    -- else insert, if conflicts loop tries update
+    begin
+      insert into public.daily_uptime_logs(address, date_key, uptime_minutes, last_ping_at)
+      values (p_address, p_day, p_minutes, now());
+      return;
+    exception when unique_violation then
+      -- do nothing, loop to update
+    end;
+  end loop;
+end;
+$$ language plpgsql;
+
 commit;

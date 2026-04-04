@@ -4,16 +4,23 @@
   "main": "dist/watcher.js",
   "scripts": {
     "start": "ts-node src/watcher.ts",
+    "distribute": "ts-node src/distributor_bot.ts",
+    "api": "ts-node src/heartbeatApi.ts",
     "build": "tsc"
   },
   "dependencies": {
-    "ethers": "^6.8.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "chalk": "^4.1.2",
+    "cors": "^2.8.6",
     "dotenv": "^16.3.1",
-    "chalk": "^4.1.2"
+    "ethers": "^6.8.0",
+    "express": "^4.22.1"
   },
   "devDependencies": {
-    "typescript": "^5.2.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.0.0",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
   }
 }
