@@ -232,4 +232,30 @@ begin
 end;
 $$ language plpgsql;
 
+-- 12) Referral System
+create table if not exists public.referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_address text not null,
+  referred_address text not null unique, -- each address can only be referred once
+  bonus_minutes integer not null default 60,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_referrals_referrer on public.referrals(referrer_address);
+
+-- 13) Anti-Sybil: Anomaly Detection View
+-- Flags addresses with suspiciously high uptime (>1200 min/day = 20 hrs)
+create or replace view public.suspicious_miners as
+  select address, date_key, uptime_minutes
+  from public.daily_uptime_logs
+  where uptime_minutes > 1200;
+
+-- 14) Anti-Sybil: Hard cap uptime at 1440 minutes per day
+-- Add a check constraint to prevent impossible values
+alter table public.daily_uptime_logs
+  drop constraint if exists max_daily_uptime;
+
+alter table public.daily_uptime_logs
+  add constraint max_daily_uptime check (uptime_minutes <= 1440);
+
 commit;
