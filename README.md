@@ -172,6 +172,18 @@ jobs:
     ```bash
     npx hardhat run scripts/deploy_aurachain_ai.ts --network aurachain
     ```
+   สคริปต์นี้จะ deploy ครบทั้ง `AuraEternityToken`, `EternityPool`, `AuraReputationNFT`, `AuraRewardDistributor`
+   และตั้งค่าความสัมพันธ์ระหว่างสัญญาให้อัตโนมัติ
+
+5. ตั้งค่า backend distributor ให้ตรงกับ contract ใหม่
+    ```bash
+    cd ../aura-guardian-node
+    npm install
+    npm run build
+    npm run distribute
+    ```
+   สำหรับ production ให้ตั้ง scheduler ทุก 1 นาที (เช่น systemd/pm2/task scheduler/cron)
+   และใช้ owner key ที่เป็น guardian ด้วย เพื่อให้ pipeline `propose -> approve -> execute` ครบในรอบเดียว
 
 > **หมายเหตุ:**  
 > - อย่า push ไฟล์ `.env` จริงขึ้น GitHub เด็ดขาด  
