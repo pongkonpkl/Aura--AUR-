@@ -2,11 +2,15 @@ name: Aura Eternity Distributor Bot
 
 on:
   schedule:
-    # รันเวลา 17:00 UTC (เท่ากับ 00:00 เที่ยงคืน ตามเวลาประเทศไทย) ทุกวัน
-    - cron: '0 17 * * *'
+    # GitHub Actions รองรับขั้นต่ำทุก 5 นาที
+    - cron: '*/5 * * * *'
   
   # หรือสามารถกดปุ่มให้แมนนวล รันทดสอบได้จากหน้าเว็บ
   workflow_dispatch:
+
+concurrency:
+  group: aura-minute-distributor
+  cancel-in-progress: false
 
 jobs:
   distribute_rewards:
@@ -34,4 +38,20 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RPC_URL: ${{ secrets.RPC_URL }}
           DISTRIBUTOR_PRIVATE_KEY: ${{ secrets.DISTRIBUTOR_PRIVATE_KEY }}
-        run: npm run distribute
+          REWARD_DISTRIBUTOR_ADDRESS: ${{ secrets.REWARD_DISTRIBUTOR_ADDRESS }}
+        run: |
+          set -e
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_KEY"
+          test -n "$RPC_URL"
+          test -n "$DISTRIBUTOR_PRIVATE_KEY"
+          test -n "$REWARD_DISTRIBUTOR_ADDRESS"
+
+          echo "Starting 5-minute minute-slot runner..."
+          for i in 1 2 3 4 5; do
+            echo "Run $i/5"
+            npm run distribute
+            if [ "$i" -lt 5 ]; then
+              sleep 60
+            fi
+          done

@@ -185,6 +185,10 @@ jobs:
    สำหรับ production ให้ตั้ง scheduler ทุก 1 นาที (เช่น systemd/pm2/task scheduler/cron)
    และใช้ owner key ที่เป็น guardian ด้วย เพื่อให้ pipeline `propose -> approve -> execute` ครบในรอบเดียว
 
+6. หากใช้ GitHub Actions สำหรับ auto-distribution
+   - เพิ่ม secrets ให้ครบ: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `RPC_URL`, `DISTRIBUTOR_PRIVATE_KEY`, `REWARD_DISTRIBUTOR_ADDRESS`
+   - workflow ตั้งให้รันทุก 5 นาทีและวนจ่ายภายใน job นาทีต่อนาที
+
 > **หมายเหตุ:**  
 > - อย่า push ไฟล์ `.env` จริงขึ้น GitHub เด็ดขาด  
 > - ตรวจสอบค่าทุก field ใน .env ให้ถูกต้องก่อน deploy
