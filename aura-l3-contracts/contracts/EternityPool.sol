@@ -19,21 +19,33 @@ contract AuraEternityToken is ERC20, Ownable {
 // --- Distributor contract: แจก 1 AUR/วัน --- //
 contract EternityPool is Ownable {
     AuraEternityToken public aura;
+    address public distributor; // Authorized contract to call distribute
     uint256 public lastMintDay = 0;
     uint256 public constant DAILY_AUR = 1e18; // 1 AUR = 10^18 sparks
 
     event Distributed(uint256 day, uint count);
+    event DistributorUpdated(address indexed distributor);
 
     constructor(address auraToken) Ownable(msg.sender) {
         aura = AuraEternityToken(auraToken);
         lastMintDay = today();
     }
 
+    function setDistributor(address _distributor) external onlyOwner {
+        distributor = _distributor;
+        emit DistributorUpdated(_distributor);
+    }
+
+    modifier onlyAuthorized() {
+        require(msg.sender == owner() || msg.sender == distributor, "Not authorized");
+        _;
+    }
+
     // Only once per day! dayKey = today() (unix days)
     function distribute(
         address[] calldata recipients,
         uint256[] calldata shares
-    ) external onlyOwner {
+    ) external onlyAuthorized {
         require(recipients.length == shares.length, "Length mismatch");
         require(today() > lastMintDay, "Already this day");
         require(recipients.length > 0, "No recipients");

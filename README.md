@@ -1,140 +1,189 @@
-<div align="center">
-  <img src="./aura-logo.png" alt="Aura Logo" width="160" />
-  <h1>Aura (AUR) · Sovereign Stack</h1>
-  <p><strong>The World's First AI-Regulated Proof-of-Presence L3 Ecosystem</strong></p>
+# AuraChainAI Ecosystem
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-  [![Version](https://img.shields.io/badge/Version-2.0_Sovereign-a855f7.svg)]()
-  [![Build](https://img.shields.io/github/actions/workflow/status/pongkonpkl/Wallet-Aura/pages.yml?label=GitHub%20Pages&logo=github)](https://github.com/pongkonpkl/Wallet-Aura/actions)
-  [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.0-success)](https://nodejs.org)
-  [![Supabase](https://img.shields.io/badge/Backend-Supabase-3ECF8E?logo=supabase)](https://supabase.com)
-</div>
+## Overview
 
-<br/>
-
-> **Aura** is not just a wallet. It is a fully self-governing digital nation — where citizens mine tokens by being present, vote on governance with Karma-weighted ballots, and are protected by AI-regulated constitutional law. All automated. All transparent.
+**AuraChainAI** is a next‑generation, AI‑governed blockchain ecosystem built on the Aura platform. It introduces a fully autonomous reward distribution pipeline, AI‑driven governance, NFT‑based reputation, and real‑time UI visualizations. The system is designed to be **additive‑only**, preserving existing Aura functionality while extending it with powerful AI features.
 
 ---
 
-## ✨ The 5 Pillars of the Aura Sovereign Stack
+## 1. Reward Distributor & AI Freeze Governance (Smart Contract Layer)
 
-### 🪙 1. Eternity Pool (Proof-of-Presence Mining)
-The most user-friendly mining protocol in Web3. **No GPUs. No ASICs. Just open the app.**
-
-- Exactly **1 AUR** is issued per day, split proportionally among all active citizens
-- Uptime is tracked per-minute via a heartbeat signal from the React frontend
-- The daily pool is distributed automatically at midnight by the Guardian Bot via **GitHub Actions**
-
-### 🏛️ 2. Parliament (AI-Regulated On-Chain Democracy)
-A governance system where **no single person has absolute power** — not even the creator.
-
-- Any Citizen can submit a Proposal (new features, rule changes, treasury moves)
-- Citizens vote with **Karma-weighted ballots** — the more you mine, the louder your voice
-- All proposals must pass through the **AI Regulator** (Constitutional Guardian) before execution
-- Prevents rug pulls and malicious governance attacks by design
-
-### 🏆 3. Leaderboard (Gamified Engagement)
-Turn passive holding into active competition.
-
-- Real-time daily ranking of top miners
-- Shows estimated AUR reward each Citizen will earn tonight
-- Refreshes every 60 seconds — creates a "live" feeling and keeps users engaged
-
-### 🛡️ 4. Anti-Sybil Defense (Multi-Layer Security)
-Three independent security layers that work together:
-
-| Layer | Mechanism | Effect |
-|---|---|---|
-| **Client** | `document.hidden` tab check | Pauses mining when user away |
-| **Server** | 45-second rate limit in PostgreSQL RPC | Drops rapid-fire bot pings silently |
-| **Database** | Hard cap `uptime_minutes <= 1440` | Physically impossible to exceed 24h/day |
-| **Analytics** | `suspicious_miners` View | Flags anyone >20h/day for review |
-
-### 🤖 5. Guardian Node (Zero-Trust Automation)
-A fully autonomous reward engine that runs every night without human intervention.
-
-- **GitHub Actions** cron job triggers at 00:00 ICT (17:00 UTC) every day
-- Reads uptime from Supabase, calculates each citizen's share, and dispatches AUR
-- Requires zero server maintenance — runs on GitHub's free infrastructure
+### Workflow
+1. **Data Collection** – Backend or dApp aggregates daily uptime/mining weight for each address and sends it to the smart contract.
+2. **Proposal** – Smart contract stores a `proposeDistribution(address[] users, uint256[] weights)` transaction. The distribution is marked **PENDING**.
+3. **AI Guardian** – An AI/Guardian node listens for the `DistributionProposed` event, runs anomaly detection (sybil, bot, risk analysis) and returns an **approve** or **freeze** decision.
+4. **Execution** –
+   - `approveDistribution(dayId)` – mints and distributes AUR tokens according to weight and any NFT multiplier.
+   - `freezeDistribution(dayId, reason)` – halts the distribution, logs the reason and notifies users.
+5. **Events** – Every action emits events for full auditability.
 
 ---
 
-## 🏗️ Repository Architecture
+## 2. Proposal DAO, AI Participation, Multi‑layer Approval
 
-```
-Aura (AUR)/                         ← Monorepo Root
-├── .github/workflows/
-│   ├── pages.yml                   ← CI/CD: Deploy wallet to GitHub Pages
-│   └── distributor.yml             ← CRON: Nightly AUR distribution bot
-│
-├── aura-wallet-ledger/web/         ← ⭐ MAIN FRONTEND (React + Vite)
-│   └── src/ui/pages/
-│       ├── Dashboard.tsx           ← Mining interface
-│       ├── Leaderboard.tsx         ← Live rankings
-│       ├── Parliament.tsx          ← Governance & voting
-│       ├── Explorer.tsx            ← Transaction ledger
-│       └── MasterNodeDashboard.tsx ← Guardian Node status
-│
-├── aura-guardian-node/             ← Backend bot (TypeScript)
-│   └── distributor_bot.ts          ← Nightly reward distributor
-│
-├── contracts/
-│   └── AuraL3_AIConstitution.sol   ← Solidity: Governance smart contract
-│
-└── schema_v1.sql                   ← Full PostgreSQL schema (Supabase)
-```
+### Workflow
+1. **Create Proposal** – Anyone (Human or AI node) can call `createProposal(title, detail, proposerType)`.
+2. **Voting** – Both human voters and AI oracle nodes cast votes via `voteProposal(proposalId, vote)`.
+3. **Quorum** – When the quorum is reached, `executeProposal(proposalId)` runs automatically (e.g., upgrade contract, change distribution formula, freeze a node).
+4. **Transparency** – All proposals, votes, and execution logs are on‑chain.
 
 ---
 
-## 🚀 Quick Start (Full Stack)
+## 3. NFT Reputation & Utility
 
-### Step 1: Database Setup (Supabase)
-1. Create a free project at [app.supabase.com](https://app.supabase.com)
-2. Go to **SQL Editor** and run the entire `schema_v1.sql` file
-3. This creates all tables: `daily_uptime_logs`, `citizens`, `proposals`, `votes`, `referrals`
-
-### Step 2: Configure GitHub Secrets
-Go to your GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret**
-
-Add these **6 secrets**:
-
-| Secret Name | Where to Get It |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API → `anon` `public` key |
-| `SUPABASE_URL` | Same as above |
-| `SUPABASE_SERVICE_KEY` | Supabase → Project Settings → API → `service_role` key (**keep secret!**) |
-| `RPC_URL` | [Alchemy](https://alchemy.com) or [Infura](https://infura.io) — get a free API key |
-| `DISTRIBUTOR_PRIVATE_KEY` | Your master distributor wallet's private key |
-
-### Step 3: Deploy
-Push to `main` branch — GitHub Actions will automatically:
-1. **Build** the React wallet and deploy to GitHub Pages
-2. **Run** the nightly distributor bot every midnight ICT
+### Workflow
+1. **Earn EXP** – Events such as mining, DAO voting, reporting anomalies award experience points.
+2. **Badge Minting** – The `AuraReputationNFT` contract evaluates EXP and mints a soul‑bound badge (Bronze, Silver, Gold).
+3. **Multiplier** – Each badge level provides a minting multiplier (e.g., +5 % for Bronze, +10 % for Silver, +15 % for Gold) that boosts reward distribution.
+4. **Privileges** – Badges unlock higher voting weight and access to privileged DAO actions.
 
 ---
 
-## 📜 Smart Contract: AuraL3 AI Constitution
+## 4. AI Oracle & Node Integration (Decentralized AI)
 
-The `AuraL3_AIConstitution.sol` contract enforces constitutional law on every governance action:
+1. **AI Guardian Nodes** run anomaly‑detection models (LLM/ML) in a distributed fashion.
+2. **Event Broadcast** – When an event occurs, AI nodes evaluate it and broadcast the result to the contract.
+3. **Consensus** – If a majority of AI nodes agree, the action (approve/freeze) is executed.
+4. **Incentives & Slashing** – Nodes earn incentives for correct decisions and are slashed for false reports.
+
+---
+
+## 5. Visualization & UX
+
+- **Dashboard (Galaxy Explorer)** – Real‑time transaction flow, energy movement, and status of approvals/freeze.
+- **Leaderboard & NFT Badge Dashboard** – Shows ranking, badge level, EXP progress, and multiplier.
+- **Notification Center** – Pushes alerts for pending distributions, freezes, and DAO outcomes.
+- **Onboarding Tutorial** – Guides new users through the AI‑governed ecosystem.
+
+---
+
+## 6. Monitoring, Testing & Reliability
+
+- **Cron/Worker** – Hourly jobs verify log consistency across backend, contracts, and UI.
+- **Comprehensive Test Suite** – Unit and integration tests for all contract functions, AI guardian flows, and UI components.
+- **Zero‑Downtime Sync** – Guarantees that UI always reflects the latest on‑chain state.
+
+---
+
+## 7. Smart Contract Interfaces (Solidity)
 
 ```solidity
-// No proposal can execute without:
-// 1. A democratic majority (yesVotes > noVotes)
-// 2. An AI Regulator approval (policyHash must match)
-function executeProposal(uint256 proposalId, bytes32 policyHash) external onlyRegulator {
-    require(p.yesVotes > p.noVotes, "No majority");
-    require(aiPolicyApproved[policyHash], "No AI approval");
-    // ... execute
-}
+function proposeDistribution(address[] memory users, uint256[] memory weights) external onlyOwner;
+function approveDistribution(uint256 day) external onlyGuardian;
+function freezeDistribution(uint256 day, string memory reason) external onlyGuardian;
+function createProposal(string memory title, string memory detail, uint8 proposerType) external;
+function voteProposal(uint256 proposalId, uint8 vote) external; // Human or AI Node
+function mintReputationNFT(address to, uint8 badgeLevel) external;
+function getUserMultiplier(address user) external view returns (uint256);
 ```
-
-This dual-key mechanism makes governance **manipulation-resistant by design**.
 
 ---
 
-## 🤝 Contributing
+## 8. Repository Structure
 
-Aura is governed by its citizens. Before submitting major changes, read `AURA_MANIFESTO.md` to ensure your contribution aligns with the sovereign autonomy principles.
+```
+Aura (AUR)/
+├─ contracts/                # Solidity contracts (RewardDistributor, ReputationNFT, L3 Constitution)
+├─ aura-guardian-node/       # AI Guardian services, heartbeat, oracle consensus
+├─ aura-wallet-ledger/       # Front‑end (React/Vite) & mobile (React‑Native)
+│   ├─ web/src/ui/pages/    # Dashboard, Leaderboard, Parliament, etc.
+│   └─ mobile/src/screens/  # Mobile UI equivalents
+├─ aura-l4-ai-agents/        # AI agents (anti‑sybil, risk assessment)
+└─ README.md                # <‑ This document
+```
 
-*Built for the future. Maintained by the Citizens of Aura.*
+---
+
+## 9. Getting Started
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/AuraChainAI.git
+cd AuraChainAI
+
+# Install dependencies (frontend)
+cd aura-wallet-ledger/web
+npm install
+npm run dev   # start Vite dev server
+
+# Deploy contracts (Hardhat example)
+cd ../../contracts
+npx hardhat compile
+npx hardhat run scripts/deploy.ts --network testnet
+
+# Run Guardian node
+cd ../../aura-guardian-node
+npm install
+npm run start   # launches AI Guardian services
+```
+
+---
+
+## 10. CI / CD (GitHub Actions)
+
+```yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install deps
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install deps
+        run: npm ci
+      - name: Test contracts
+        run: npx hardhat test
+      - name: Test UI
+        run: npm run test
+```
+
+---
+
+## 🚀 การเปิดใช้งาน AuraChainAI
+
+1. เข้าสู่โฟลเดอร์โปรเจกต์
+    ```bash
+    cd aura-l3-contracts
+    ```
+
+2. ติดตั้ง dependencies ที่จำเป็น
+    ```bash
+    npm install
+    ```
+
+3. สร้างไฟล์ `.env` (โดย copy จาก `.env.example` และแก้ไขค่าจริง)
+    ```bash
+    cp .env.example .env
+    # หรือสร้างใหม่แล้วกรอกข้อมูลที่จำเป็นให้ครบ
+    ```
+   ค่าอย่างน้อยที่ต้องมีสำหรับ deploy: `RPC_URL`, `PRIVATE_KEY` และ (ถ้ามี) `ETERNITY_POOL_ADDRESS`
+
+4. Deploy Smart Contract ขึ้น AuraChain network
+    ```bash
+    npx hardhat run scripts/deploy_aurachain_ai.ts --network aurachain
+    ```
+
+> **หมายเหตุ:**  
+> - อย่า push ไฟล์ `.env` จริงขึ้น GitHub เด็ดขาด  
+> - ตรวจสอบค่าทุก field ใน .env ให้ถูกต้องก่อน deploy
+> - หลัง deploy สำเร็จ ให้นำ contract address ไปใช้งานในระบบ dashboard/front-end ต่อ หรืออัปเดตในไฟล์ env เพิ่มเติมตามที่โปรเจกต์แนะนำ
+
+---
+
+## 12. License & Contributions
+
+- **License:** MIT
+- **Contributing:** Fork the repo, create a feature branch, and submit a pull request. Follow the code‑style guidelines in `.eslintrc` and run `npm run lint` before committing.
+
+---
+
+*Prepared by the Antigravity AI assistant on 2026‑04‑05.*

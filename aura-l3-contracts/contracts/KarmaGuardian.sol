@@ -16,7 +16,7 @@ contract KarmaGuardian {
 
     function updateKarma(address citizen, int256 delta) public onlyAIRegulator {
         int256 base = int256(karmaScore[citizen]);
-        karmaScore[citizen] = uint256(base + delta > 0 ? base + delta : 0);
+        karmaScore[citizen] = uint256(base + delta > 0 ? base + delta : int256(0));
     }
 
     function eligibleToVote(address citizen) public view returns(bool) {

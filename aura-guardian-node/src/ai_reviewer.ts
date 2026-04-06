@@ -1,3 +1,5 @@
+import chalk from "chalk";
+
 export interface L3Config {
   burnRate: number;
   hasHeartbeat: boolean;

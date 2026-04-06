@@ -1,13 +1,27 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.20",
+  solidity: {
+    version: "0.8.24",
+    settings: {
+      evmVersion: "cancun",
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
+  },
   networks: {
     hardhat: {},
-    // sepolia: {
-    //   url: "YOUR_ALCHEMY_API_URL",
-    //   accounts: ["YOUR_PRIVATE_KEY"]
-    // }
+    aurachain: {
+      url: process.env.RPC_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
+    },
+    sepolia: {
+      url: process.env.SEPOLIA_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
+    }
   }
 };

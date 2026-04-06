@@ -9,13 +9,13 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
 const DISTRIBUTOR_PRIVATE_KEY = process.env.DISTRIBUTOR_PRIVATE_KEY || "";
-const ETERNITY_POOL_ADDRESS = process.env.ETERNITY_POOL_ADDRESS || "";
+const REWARD_DISTRIBUTOR_ADDRESS = process.env.REWARD_DISTRIBUTOR_ADDRESS || "";
 
-// ABI for EternityPool
-const ETERNITY_POOL_ABI = [
-  "function distribute(address[] calldata recipients, uint256[] calldata shares) external",
-  "function lastMintDay() external view returns (uint256)",
-  "function today() public view returns (uint256)"
+// ABI for AuraRewardDistributor (Wraps EternityPool)
+const REWARD_DISTRIBUTOR_ABI = [
+  "function proposeDistribution(address[] calldata recipients, uint256[] calldata shares) external",
+  "function getDistributionStatus(uint256 dayId) external view returns (uint8)",
+  "function currentDay() public view returns (uint256)"
 ];
 
 const MIN_UPTIME_MINUTES = 60; // Minimum 1 hour online to qualify
@@ -23,7 +23,7 @@ const MIN_UPTIME_MINUTES = 60; // Minimum 1 hour online to qualify
 async function main() {
   console.log("🚀 Starting Aura Eternity Pool Distributor Bot...");
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !DISTRIBUTOR_PRIVATE_KEY || !ETERNITY_POOL_ADDRESS) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !DISTRIBUTOR_PRIVATE_KEY || !REWARD_DISTRIBUTOR_ADDRESS) {
     console.error("❌ ERROR: Missing required environment variables.");
     process.exit(1);
   }
@@ -31,20 +31,19 @@ async function main() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet = new ethers.Wallet(DISTRIBUTOR_PRIVATE_KEY, provider);
-  const eternityPool = new ethers.Contract(ETERNITY_POOL_ADDRESS, ETERNITY_POOL_ABI, wallet);
+  const distributor = new ethers.Contract(REWARD_DISTRIBUTOR_ADDRESS, REWARD_DISTRIBUTOR_ABI, wallet);
 
-  // 1. Check if we already distributed today
+  // 1. Check if we already proposed today
   try {
-    const today = await eternityPool.today();
-    const lastMintDay = await eternityPool.lastMintDay();
+    const today = await distributor.currentDay();
+    const status = await distributor.getDistributionStatus(today);
 
-    if (today <= lastMintDay) {
-      console.log(`✅ Already distributed for today (Day ${today}). Exiting.`);
+    if (status !== 0) { // 0 = NONE
+      console.log(`✅ Day ${today} already has a record (status: ${status}). Exiting.`);
       process.exit(0);
     }
   } catch (error) {
-    console.error("❌ Warning: Cannot read from EternityPool contract. Is it deployed correctly?", error);
-    // Proceeding for debugging purposes (in production, exit here)
+    console.error("❌ Warning: Cannot read from RewardDistributor contract.", error);
   }
 
   // 2. Fetch recipients from Supabase (yesterday or today's eligible users)
@@ -82,9 +81,9 @@ async function main() {
   console.log(`🎯 Found ${recipients.length} eligible recipients. Total weights: ${totalShares}`);
 
   // 4. Send transaction
-  console.log("⏳ Sending distribute() transaction to blockchain...");
+  console.log("⏳ Sending proposeDistribution() to AuraRewardDistributor...");
   try {
-    const tx = await eternityPool.distribute(recipients, shares);
+    const tx = await distributor.proposeDistribution(recipients, shares);
     console.log(`✅ Transaction sent! Hash: ${tx.hash}`);
     
     console.log("⏳ Waiting for confirmation...");
