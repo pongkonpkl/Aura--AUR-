@@ -20,15 +20,18 @@ contract AuraEternityToken is ERC20, Ownable {
 contract EternityPool is Ownable {
     AuraEternityToken public aura;
     address public distributor; // Authorized contract to call distribute
-    uint256 public lastMintDay = 0;
+    uint256 public lastMintMinute = 0;
     uint256 public constant DAILY_AUR = 1e18; // 1 AUR = 10^18 sparks
+    uint256 public constant MINUTES_PER_DAY = 1440;
+    uint256 public constant PER_MINUTE_BASE = DAILY_AUR / MINUTES_PER_DAY;
+    uint256 public constant PER_MINUTE_REMAINDER = DAILY_AUR % MINUTES_PER_DAY;
 
-    event Distributed(uint256 day, uint count);
+    event Distributed(uint256 minuteId, uint count, uint256 emissionAmount);
     event DistributorUpdated(address indexed distributor);
 
     constructor(address auraToken) Ownable(msg.sender) {
         aura = AuraEternityToken(auraToken);
-        lastMintDay = today();
+        lastMintMinute = currentMinute();
     }
 
     function setDistributor(address _distributor) external onlyOwner {
@@ -41,13 +44,14 @@ contract EternityPool is Ownable {
         _;
     }
 
-    // Only once per day! dayKey = today() (unix days)
+    // Only once per minute. Total emission remains exactly 1 AUR/day.
     function distribute(
         address[] calldata recipients,
         uint256[] calldata shares
     ) external onlyAuthorized {
         require(recipients.length == shares.length, "Length mismatch");
-        require(today() > lastMintDay, "Already this day");
+        uint256 minuteId = currentMinute();
+        require(minuteId > lastMintMinute, "Already this minute");
         require(recipients.length > 0, "No recipients");
 
         // รวมสัดส่วนทั้งหมด
@@ -57,13 +61,29 @@ contract EternityPool is Ownable {
         }
         require(total > 0, "Total share zero");
 
+        uint256 emissionAmount = _minuteEmission(minuteId);
+
         // Mint AUR และแจกตามสัดส่วน
         for (uint i = 0; i < recipients.length; i++) {
-            uint256 amount = (DAILY_AUR * shares[i]) / total; // แจกตาม weight/เวลาคนๆ นั้น
+            uint256 amount = (emissionAmount * shares[i]) / total;
             if (amount > 0) aura.mint(recipients[i], amount);
         }
-        lastMintDay = today();
-        emit Distributed(lastMintDay, recipients.length);
+        lastMintMinute = minuteId;
+        emit Distributed(minuteId, recipients.length, emissionAmount);
+    }
+
+    function _minuteEmission(uint256 minuteId) internal pure returns (uint256) {
+        uint256 minuteOfDay = minuteId % MINUTES_PER_DAY;
+        // Spread the 640 wei/day remainder over first 640 minutes.
+        return PER_MINUTE_BASE + (minuteOfDay < PER_MINUTE_REMAINDER ? 1 : 0);
+    }
+
+    function emissionForCurrentMinute() external view returns (uint256) {
+        return _minuteEmission(currentMinute());
+    }
+
+    function currentMinute() public view returns (uint256) {
+        return block.timestamp / 60;
     }
 
     // helper - คืนเลขวันแบบ unix days

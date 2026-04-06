@@ -14,11 +14,13 @@ const REWARD_DISTRIBUTOR_ADDRESS = process.env.REWARD_DISTRIBUTOR_ADDRESS || "";
 // ABI for AuraRewardDistributor (Wraps EternityPool)
 const REWARD_DISTRIBUTOR_ABI = [
   "function proposeDistribution(address[] calldata recipients, uint256[] calldata shares) external",
-  "function getDistributionStatus(uint256 dayId) external view returns (uint8)",
-  "function currentDay() public view returns (uint256)"
+  "function approveDistribution(uint256 dayId) external",
+  "function executeDistribution(uint256 dayId) external",
+  "function getDistributionState(uint256 dayId) external view returns (uint8)",
+  "function currentMinute() public view returns (uint256)"
 ];
 
-const MIN_UPTIME_MINUTES = 60; // Minimum 1 hour online to qualify
+const MIN_UPTIME_MINUTES = 1; // minute-by-minute payout visibility
 
 async function main() {
   console.log("🚀 Starting Aura Eternity Pool Distributor Bot...");
@@ -33,21 +35,21 @@ async function main() {
   const wallet = new ethers.Wallet(DISTRIBUTOR_PRIVATE_KEY, provider);
   const distributor = new ethers.Contract(REWARD_DISTRIBUTOR_ADDRESS, REWARD_DISTRIBUTOR_ABI, wallet);
 
-  // 1. Check if we already proposed today
+  // 1. Check if current minute slot already processed
   try {
-    const today = await distributor.currentDay();
-    const status = await distributor.getDistributionStatus(today);
+    const today = await distributor.currentMinute();
+    const status = await distributor.getDistributionState(today);
 
     if (status !== 0) { // 0 = NONE
-      console.log(`✅ Day ${today} already has a record (status: ${status}). Exiting.`);
+      console.log(`✅ Minute slot ${today} already has a record (status: ${status}). Exiting.`);
       process.exit(0);
     }
   } catch (error) {
     console.error("❌ Warning: Cannot read from RewardDistributor contract.", error);
   }
 
-  // 2. Fetch recipients from Supabase (yesterday or today's eligible users)
-  // For simplicity, we filter by date_key = today and uptime > MIN_UPTIME_MINUTES
+  // 2. Fetch recipients from Supabase
+  // Use daily logs as rolling weight source for minute slots.
   const todayStr = new Date().toISOString().split("T")[0];
   console.log(`📊 Fetching valid uptime logs for ${todayStr}...`);
 
@@ -88,14 +90,24 @@ async function main() {
     
     console.log("⏳ Waiting for confirmation...");
     const receipt = await tx.wait();
-    console.log(`🎉 Distribution confirmed in block ${receipt.blockNumber}`);
+    const minuteSlot = await distributor.currentMinute();
+    console.log(`🎉 Proposal confirmed in block ${receipt.blockNumber} (slot ${minuteSlot})`);
 
-    // 5. Log securely into Supabase history
+    // 5. Complete pipeline in same run: approve + execute.
+    const approveTx = await distributor.approveDistribution(minuteSlot);
+    await approveTx.wait();
+    console.log(`✅ Approved slot ${minuteSlot}: ${approveTx.hash}`);
+
+    const executeTx = await distributor.executeDistribution(minuteSlot);
+    const executeReceipt = await executeTx.wait();
+    console.log(`💸 Executed slot ${minuteSlot} in block ${executeReceipt.blockNumber}`);
+
+    // 6. Log securely into Supabase history
     await supabase.from("daily_distribution_history").insert({
       distribution_date: todayStr,
       total_recipients: recipients.length,
       total_shares: totalShares,
-      transaction_hash: receipt.hash || tx.hash
+      transaction_hash: executeReceipt?.hash || executeTx.hash
     });
     
     console.log("✅ Logged strictly to Supabase daily_distribution_history.");

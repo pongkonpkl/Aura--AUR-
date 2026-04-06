@@ -15,6 +15,7 @@
 4. **Execution** –
    - `approveDistribution(dayId)` – mints and distributes AUR tokens according to weight and any NFT multiplier.
    - `freezeDistribution(dayId, reason)` – halts the distribution, logs the reason and notifies users.
+   - Distribution cadence is **1 minute per slot** while preserving an exact cap of **1 AUR per day** (1,440 slots/day).
 5. **Events** – Every action emits events for full auditability.
 
 ---
@@ -59,7 +60,7 @@
 
 ## 6. Monitoring, Testing & Reliability
 
-- **Cron/Worker** – Hourly jobs verify log consistency across backend, contracts, and UI.
+- **Cron/Worker** – Per-minute distributor jobs process slot-by-slot payouts and verify consistency across backend, contracts, and UI.
 - **Comprehensive Test Suite** – Unit and integration tests for all contract functions, AI guardian flows, and UI components.
 - **Zero‑Downtime Sync** – Guarantees that UI always reflects the latest on‑chain state.
 

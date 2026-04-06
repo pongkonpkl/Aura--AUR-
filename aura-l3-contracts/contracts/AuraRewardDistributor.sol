@@ -48,13 +48,13 @@ contract AuraRewardDistributor is Ownable {
     }
 
     mapping(uint256 => Distribution) public distributions;
-    uint256 public currentDayId;
+    uint256 public currentSlotId;
 
     // ─── Events (audit trail) ─────────────────────────────
-    event DistributionProposed(uint256 indexed dayId, uint256 recipientCount, uint256 totalWeight);
-    event DistributionApproved(uint256 indexed dayId, address indexed guardian);
-    event DistributionFrozen(uint256 indexed dayId, address indexed guardian, string reason);
-    event DistributionExecuted(uint256 indexed dayId, uint256 recipientCount);
+    event DistributionProposed(uint256 indexed slotId, uint256 recipientCount, uint256 totalWeight);
+    event DistributionApproved(uint256 indexed slotId, address indexed guardian);
+    event DistributionFrozen(uint256 indexed slotId, address indexed guardian, string reason);
+    event DistributionExecuted(uint256 indexed slotId, uint256 recipientCount);
     event GuardianAdded(address indexed guardian);
     event GuardianRemoved(address indexed guardian);
 
@@ -106,11 +106,11 @@ contract AuraRewardDistributor is Ownable {
         require(users.length == weights.length, "Length mismatch");
         require(users.length > 0, "Empty distribution");
 
-        uint256 dayId = block.timestamp / 1 days;
+        uint256 slotId = block.timestamp / 60;
         require(
-            distributions[dayId].status == Status.NONE ||
-            distributions[dayId].status == Status.FROZEN,
-            "Distribution already active for today"
+            distributions[slotId].status == Status.NONE ||
+            distributions[slotId].status == Status.FROZEN,
+            "Distribution already active for current minute"
         );
 
         uint256 totalWeight = 0;
@@ -119,8 +119,8 @@ contract AuraRewardDistributor is Ownable {
         }
         require(totalWeight > 0, "Zero total weight");
 
-        Distribution storage d = distributions[dayId];
-        d.dayId = dayId;
+        Distribution storage d = distributions[slotId];
+        d.dayId = slotId;
         d.users = users;
         d.weights = weights;
         d.status = Status.PENDING;
@@ -130,9 +130,9 @@ contract AuraRewardDistributor is Ownable {
         d.reviewedBy = address(0);
         d.reviewedAt = 0;
 
-        currentDayId = dayId;
+        currentSlotId = slotId;
 
-        emit DistributionProposed(dayId, users.length, totalWeight);
+        emit DistributionProposed(slotId, users.length, totalWeight);
     }
 
     // ─── §1 Phase 2a: AI Approve ──────────────────────────
@@ -204,7 +204,17 @@ contract AuraRewardDistributor is Ownable {
         return m == 0 ? 10000 : m;
     }
 
-    function todayDayId() external view returns (uint256) {
-        return block.timestamp / 1 days;
+    function currentMinute() external view returns (uint256) {
+        return block.timestamp / 60;
+    }
+
+    // Backward-compatible alias for existing bot integrations.
+    function currentDay() external view returns (uint256) {
+        return block.timestamp / 60;
+    }
+
+    // Lightweight status getter for scripts that only need enum state.
+    function getDistributionState(uint256 slotId) external view returns (uint8) {
+        return uint8(distributions[slotId].status);
     }
 }
