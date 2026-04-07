@@ -1,5 +1,16 @@
 # AuraChainAI Ecosystem
 
+## ⚡ Local Celestial Quickstart (One-Command)
+
+หากต้องการรันระบบครบวงจร (Local Chain + Guardian Bot + UI) บนเครื่อง Windows:
+
+1. เปิด Terminal ที่ root ของโปรเจกต์
+2. รันคำสั่ง:
+   ```bash
+   npm run dev:local
+   ```
+ระบบจะเปิด 3 หน้าต่างใหม่ให้โดยอัตโนมัติ พร้อมสำหรับการทดสอบ End-to-End ทันทีครับ!
+
 ## Overview
 
 **AuraChainAI** is a next‑generation, AI‑governed blockchain ecosystem built on the Aura platform. It introduces a fully autonomous reward distribution pipeline, AI‑driven governance, NFT‑based reputation, and real‑time UI visualizations. The system is designed to be **additive‑only**, preserving existing Aura functionality while extending it with powerful AI features.

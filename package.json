@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Aura Blockchain Setup Tool",
   "main": "generate-pool.js",
+  "scripts": {
+    "dev:local": "powershell ./start-aura-local.ps1"
+  },
   "dependencies": {
     "bs58": "^5.0.0",
     "elliptic": "^6.5.4",
