@@ -14,6 +14,8 @@ const REWARD_DISTRIBUTOR_ADDRESS = process.env.REWARD_DISTRIBUTOR_ADDRESS || "";
 const LOCAL_TEST_RECIPIENT = process.env.LOCAL_TEST_RECIPIENT || "";
 const LOCAL_TEST_UPTIME_MINUTES = Number(process.env.LOCAL_TEST_UPTIME_MINUTES || "120");
 
+const IS_URL_VALID = SUPABASE_URL.startsWith("http");
+
 // ABI for AuraRewardDistributor (Wraps EternityPool)
 const REWARD_DISTRIBUTOR_ABI = [
   "function proposeDistribution(address[] calldata recipients, uint256[] calldata shares) external",
@@ -45,14 +47,15 @@ async function finalizeSlot(distributor: ethers.Contract, minuteSlot: number, cu
 }
 
 async function main() {
-  console.log("🚀 Starting Aura Eternity Pool Distributor Bot...");
+  try {
+    console.log("🚀 Starting Aura Eternity Pool Distributor Bot...");
 
   if (!DISTRIBUTOR_PRIVATE_KEY || !REWARD_DISTRIBUTOR_ADDRESS) {
     console.error("❌ ERROR: Missing required environment variables.");
     process.exit(1);
   }
 
-  const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
+  const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY && IS_URL_VALID);
   const supabase = hasSupabase ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null;
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const baseWallet = new ethers.Wallet(DISTRIBUTOR_PRIVATE_KEY, provider);
