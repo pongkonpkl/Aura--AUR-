@@ -14,6 +14,26 @@ contract AuraEternityToken is ERC20, Ownable {
     function mint(address to, uint256 amt) external onlyDistributor {
         _mint(to, amt);
     }
+
+    // 🔥 Aura Deflationary Protocol: 1% Burn on Transfer 🔥
+    function _update(address from, address to, uint256 value) internal virtual override {
+        // Apply 1% burn on regular transfers (not mints or direct burns)
+        if (from != address(0) && to != address(0)) {
+            uint256 burnAmount = value / 100; // 1%
+            uint256 sendAmount = value - burnAmount; // 99%
+
+            // Transfer 99% to recipient
+            super._update(from, to, sendAmount);
+            
+            // Burn 1%
+            if (burnAmount > 0) {
+                super._update(from, address(0), burnAmount);
+            }
+        } else {
+            // Processing mints or direct burns normally
+            super._update(from, to, value);
+        }
+    }
 }
 
 // --- Distributor contract: แจก 1 AUR/วัน --- //
