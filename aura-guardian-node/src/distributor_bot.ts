@@ -109,6 +109,7 @@ async function main() {
       process.exit(1);
     }
     logs = data || [];
+    console.log(`📡 Fetched ${logs.length} miners from Supabase.`);
   } else if (LOCAL_TEST_RECIPIENT) {
     // Local-mode fallback for end-to-end testing without Supabase linkage.
     logs = [{ address: LOCAL_TEST_RECIPIENT.toLowerCase(), uptime_minutes: LOCAL_TEST_UPTIME_MINUTES }];
@@ -120,56 +121,74 @@ async function main() {
     process.exit(0);
   }
 
-  // 3. Prepare data for the Smart Contract
-  const recipients: string[] = [];
-  const shares: number[] = [];
-  let totalShares = 0;
+  // 3. Prepare data for the Smart Contract (L3) and Ledger (L2)
+  const l3Recipients: string[] = [];
+  const l3Shares: number[] = [];
+  const l2Rewards: Array<{ address: string; amount_atom: string }> = [];
+  
+  let totalUptime = logs.reduce((sum, l) => sum + l.uptime_minutes, 0);
+  const DAILY_AUR_REWARD = 1.0; 
 
   for (const log of logs) {
-    recipients.push(log.address);
-    shares.push(log.uptime_minutes); // Using minutes directly as weight
-    totalShares += log.uptime_minutes;
+    const shareRatio = log.uptime_minutes / totalUptime;
+    const rewardAUR = DAILY_AUR_REWARD * shareRatio;
+    const amountAtom = ethers.parseUnits(rewardAUR.toFixed(18), 18).toString();
+
+    // L2 Ledger Sync (Aura ID based)
+    l2Rewards.push({ address: log.address, amount_atom: amountAtom });
+
+    // L3 Blockchain Sync (Only if 0x address is detected or mapped)
+    if (log.address.startsWith("0x")) {
+      l3Recipients.push(log.address);
+      l3Shares.push(log.uptime_minutes);
+    } else {
+      // For Local Dev: If VITE_LOCAL_EVM_ADDRESS is set in .env and matches this Aura user,
+      // we could map it. For now, we skip on-chain if no 0x address is found.
+      console.log(`⏭️ Skipping L3 for non-EVM address: ${log.address}`);
+    }
   }
 
-  console.log(`🎯 Found ${recipients.length} eligible recipients. Total weights: ${totalShares}`);
+  console.log(`🎯 Distribution Plan: ${l2Rewards.length} L2 credits, ${l3Recipients.length} L3 mints.`);
 
-  // 4. Send transaction
-  console.log("⏳ Sending proposeDistribution() to AuraRewardDistributor...");
-  try {
-    const tx = await distributor.proposeDistribution(recipients, shares);
-    console.log(`✅ Transaction sent! Hash: ${tx.hash}`);
-    
-    console.log("⏳ Waiting for confirmation...");
-    const receipt = await tx.wait();
-    let minuteSlot = Number(await distributor.currentMinute());
-    let slotState = Number(await distributor.getDistributionState(minuteSlot));
-    if (slotState !== 1) {
-      const previousSlot = minuteSlot - 1;
-      const previousState = Number(await distributor.getDistributionState(previousSlot));
-      if (previousState === 1) {
-        minuteSlot = previousSlot;
-        slotState = previousState;
-      }
+  // 4. Send L3 Transaction (On-Chain)
+  let executedHash = null;
+  if (l3Recipients.length > 0) {
+    console.log("⏳ Sending proposeDistribution() to AuraRewardDistributor...");
+    try {
+      const tx = await distributor.proposeDistribution(l3Recipients, l3Shares);
+      console.log(`✅ L3 Transaction sent! Hash: ${tx.hash}`);
+      await tx.wait();
+      
+      const minuteSlot = Number(await distributor.currentMinute());
+      executedHash = await finalizeSlot(distributor, minuteSlot);
+    } catch (e) {
+      console.error("❌ L3 Transaction failed, but continuing to L2Sync...");
+      console.error(e);
     }
-    if (slotState !== 1) {
-      console.error(`❌ Could not find pending slot after propose. currentSlot=${minuteSlot}, state=${slotState}`);
-      process.exit(1);
-    }
-    console.log(`🎉 Proposal confirmed in block ${receipt.blockNumber} (slot ${minuteSlot})`);
+  }
 
-    // 5. Complete pipeline in same run: approve + execute.
-    const executedHash = await finalizeSlot(distributor, minuteSlot);
+  // 5. Update L2 Ledger (Supabase - Works for Everyone!)
+  if (hasSupabase && supabase) {
+    console.log("⏳ Synchronizing L2 Ledger (Universal Distribution)...");
+    const { error: rpcError } = await supabase.rpc('process_universal_distribution', {
+      p_day: todayStr,
+      p_rewards: l2Rewards
+    });
 
-    // 6. Log securely into Supabase history
-    if (hasSupabase && supabase) {
+    if (rpcError) {
+      console.error("❌ L2 Sync failed:", rpcError);
+    } else {
+      console.log(`✅ L2 Universal Distribution succeeded for ${l2Rewards.length} Aura IDs.`);
+      
+      // 6. Log to history
       await supabase.from("daily_distribution_history").insert({
         distribution_date: todayStr,
-        total_recipients: recipients.length,
-        total_shares: totalShares,
-        transaction_hash: executedHash
+        total_recipients: l2Rewards.length,
+        total_shares: totalUptime,
+        transaction_hash: executedHash || "L2_ONLY_SYNC"
       });
-      console.log("✅ Logged strictly to Supabase daily_distribution_history.");
     }
+  }
 
   } catch (e) {
     console.error("❌ Transaction failed!");
