@@ -128,3 +128,52 @@ body {
 .logo-glow {
   filter: drop-shadow(0 0 15px rgba(124, 58, 237, 0.4));
 }
+
+/* Scrollytelling Utilities */
+.scrolly-container {
+  /* Reduced from 400vh to 250vh for faster storytelling and better UX */
+  height: 250vh;
+  position: relative;
+}
+
+.pin-section {
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floating-coin {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.4);
+  /* Use hardware acceleration */
+  will-change: transform;
+  z-index: 5;
+}
+
+.story-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 800px;
+  text-align: center;
+  opacity: 0;
+  padding: 0 2rem;
+  z-index: 20;
+}
+
+/* Enhanced blur for text readability over logo */
+.story-text-glass {
+  background: rgba(5, 5, 16, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 2rem;
+  padding: 3rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}

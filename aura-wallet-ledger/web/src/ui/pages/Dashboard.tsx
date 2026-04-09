@@ -85,12 +85,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <p className="text-sm">Allow "Insecure Content" for this site in your browser settings (Localhost communication).</p>
               </div>
             </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-white/90 transition-all"
-            >
-              <RefreshCw size={18} /> Re-verify Connection
-            </button>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => window.location.reload()}
+                className="flex-1 py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-white/90 transition-all text-sm"
+              >
+                <RefreshCw size={18} /> Re-verify
+              </button>
+              <button 
+                onClick={() => setIsEngineReady(true)}
+                className="flex-1 py-4 bg-indigo-500/10 text-indigo-400 font-bold rounded-2xl flex items-center justify-center hover:bg-indigo-500/20 transition-all text-sm"
+              >
+                Offline View
+              </button>
+            </div>
           </div>
         </div>
       )}
