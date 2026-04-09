@@ -12,9 +12,11 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'create'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'create_step1' | 'create_step2'>('login');
   const [password, setPassword] = useState('');
   
+  const MOCK_SEED = ["journey", "quantum", "sovereign", "node", "ledger", "block", "hash", "encrypt", "presence", "network", "aura", "eternal"];
+
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if(password.length >= 4) {
@@ -141,52 +143,79 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
               </div>
               
               <h2 className="text-2xl font-bold text-center mb-2">
-                {authMode === 'login' ? 'Unlock Sovereign Node' : 'Initialize New Node'}
+                {authMode === 'login' ? 'Unlock Sovereign Node' : 
+                 authMode === 'create_step1' ? 'Secret Recovery Phrase' : 'Secure Your Node'}
               </h2>
               <p className="text-sm text-center text-white/50 mb-8">
                 {authMode === 'login' 
-                  ? 'Enter your master sequence to synchronize'
-                  : 'Establish a new sovereign identity on the network'
+                  ? 'Enter your 4-digit PIN to synchronize'
+                  : authMode === 'create_step1' 
+                  ? 'Write down these 12 words and keep them safe.'
+                  : 'Create a 4-digit PIN to access this device.'
                 }
               </p>
 
-              <form onSubmit={handleAuthSubmit} className="space-y-6">
-                <div>
-                  <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">
-                    {authMode === 'login' ? 'Master Password' : 'Create Master Password'}
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
-                    <input 
-                      type="password" 
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••••••" 
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 focus:border-indigo-500/50 outline-none transition-all placeholder:text-white/20 font-mono" 
-                      required
-                      minLength={4}
-                    />
+              {authMode === 'create_step1' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-3 gap-3">
+                    {MOCK_SEED.map((word, idx) => (
+                      <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-2 flex items-center justify-center gap-2">
+                        <span className="text-[10px] text-white/30 font-mono">{idx + 1}</span>
+                        <span className="font-mono text-xs font-bold text-indigo-300">{word}</span>
+                      </div>
+                    ))}
                   </div>
+                  <button 
+                    onClick={() => setAuthMode('create_step2')}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg"
+                  >
+                    I've Saved Them Securely
+                  </button>
                 </div>
+              ) : (
+                <form onSubmit={handleAuthSubmit} className="space-y-6">
+                  <div>
+                    <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">
+                      {authMode === 'login' ? '4-Digit PIN' : 'Create 4-Digit PIN'}
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                      <input 
+                        type="password" 
+                        value={password}
+                        onChange={e => setPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••" 
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 focus:border-indigo-500/50 outline-none transition-all placeholder:text-white/20 font-mono text-center tracking-[1em] font-bold text-xl" 
+                        required
+                        minLength={4}
+                        maxLength={4}
+                        pattern="\d{4}"
+                      />
+                    </div>
+                  </div>
 
-                <button 
-                  type="submit"
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-600/20"
-                >
-                  {authMode === 'login' ? (
-                    <><Fingerprint size={18} /> Authenticate & Sync</>
-                  ) : (
-                    <><UserPlus size={18} /> Generate Identity</>
-                  )}
-                </button>
-              </form>
+                  <button 
+                    type="submit"
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-600/20"
+                  >
+                    {authMode === 'login' ? (
+                      <><Fingerprint size={18} /> Authenticate & Sync</>
+                    ) : (
+                      <><UserPlus size={18} /> Enter Network</>
+                    )}
+                  </button>
+                </form>
+              )}
 
               <div className="mt-6 text-center">
                 <button 
-                  onClick={() => setAuthMode(authMode === 'login' ? 'create' : 'login')}
+                  onClick={() => {
+                    setAuthMode(authMode.startsWith('create') ? 'login' : 'create_step1');
+                    setPassword('');
+                  }}
                   className="text-xs font-bold text-indigo-400/50 hover:text-indigo-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2 w-full py-3"
                 >
-                  {authMode === 'login' ? 'Create New Node Instead' : 'Access Existing Node'}
+                  {authMode.startsWith('create') ? 'Access Existing Node Instead' : 'Create New Node Instead'}
                   <ArrowRight size={14} />
                 </button>
               </div>
