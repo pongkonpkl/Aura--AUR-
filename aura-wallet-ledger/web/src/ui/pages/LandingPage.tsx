@@ -150,9 +150,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
           <div className="absolute z-10 flex flex-col items-center w-full pointer-events-none top-[15vh]">
             <div className="relative group">
               <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full scale-125" />
-              <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_30px_rgba(124,58,237,0.5)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a] overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-transparent to-purple-600/20" />
-                <span className="text-[8rem] md:text-[11rem] leading-none font-bold bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-5%] font-sans tracking-tighter">
+              <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_40px_rgba(124,58,237,0.6)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a]">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 via-transparent to-purple-600/30 rounded-full" />
+                <span className="text-[7rem] md:text-[9.5rem] leading-none font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%] font-sans tracking-tighter">
                   A
                 </span>
               </div>

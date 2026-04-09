@@ -149,8 +149,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 glass-panel rounded-3xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
           <div className="flex items-center gap-6">
-            <div className="w-16 h-16 glass-panel-accent flex items-center justify-center rounded-2xl glow-border">
-              <img src="/Aura--AUR-/aura-logo-3d.png" alt="Logo" className="w-10 h-10" />
+            <div className="w-16 h-16 flex items-center justify-center rounded-full border-2 border-indigo-500/40 bg-[#0a0a1a] shadow-[0_0_15px_rgba(124,58,237,0.4)] relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 via-transparent to-purple-600/30 rounded-full" />
+              <span className="text-4xl font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%]">
+                A
+              </span>
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-gradient">Sovereign Command</h1>
@@ -165,20 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </div>
           
           <div className="flex items-center gap-3 mt-6 md:mt-0">
-            <button 
-              onClick={() => setActiveModal('send')}
-              className="flex items-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5"
-            >
-              <ArrowUpRight size={18} className="text-indigo-400" />
-              <span className="font-bold text-sm uppercase tracking-widest">Send</span>
-            </button>
-            <button 
-              onClick={() => setActiveModal('receive')}
-              className="flex items-center gap-3 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl transition-all border border-indigo-500 font-bold"
-            >
-              <ArrowDownLeft size={18} />
-              <span className="text-sm uppercase tracking-widest">Receive</span>
-            </button>
+            {/* Action buttons moved to Treasury block for better context */}
           </div>
         </header>
 
@@ -214,11 +204,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   </div>
                   <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Celestial Treasury</span>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 mb-8">
                   <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
                     1.000<span className="text-2xl text-white/40"> AUR</span>
                   </p>
                   <p className="text-sm text-white/30 font-medium">Daily Shared Distribution</p>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setActiveModal('send')} 
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold flex justify-center items-center gap-2 border border-white/5 transition-all text-sm"
+                  >
+                    <ArrowUpRight size={16} className="text-indigo-400"/> Send
+                  </button>
+                  <button 
+                    onClick={() => setActiveModal('receive')} 
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-indigo-500 transition-all text-sm"
+                  >
+                    <ArrowDownLeft size={16}/> Receive
+                  </button>
                 </div>
               </div>
 
