@@ -63,26 +63,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
         duration: 0.5
       }, 0);
 
-      // Logo Animation (Stays Pinned, but scales and moves)
-      masterTl.to('.pro-logo', {
-        scale: 0.5,
-        y: -100, // Move Logo up slightly
-        rotateZ: 45,
-        duration: 1
-      }, 0);
-
       // Scene 1: Sovereignty Text Fades In then Out
       masterTl.to('.scene-1', { opacity: 1, y: 0, duration: 0.5 }, 0.5)
               .to('.scene-1', { opacity: 0, y: -20, duration: 0.5 }, 1.5);
 
       // Scene 2: Proof of Presence
-      masterTl.to('.pro-logo', {
-        scale: 0.7,
-        y: 0,
-        rotateZ: -45,
-        duration: 1
-      }, 1.5);
-      
       masterTl.to('.celestial-overlay', {
         backgroundColor: 'rgba(56, 189, 248, 0.1)',
         duration: 1
@@ -106,13 +91,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
       masterTl.to('.scene-3', { opacity: 0, y: -20, duration: 0.5 }, 5);
       
       // Scene 4: The Final Action (Button)
-      masterTl.to('.pro-logo', {
-        scale: 1,
-        y: -50,
-        rotateZ: 0,
-        duration: 1
-      }, 5);
-      
       masterTl.to('.celestial-overlay', {
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
         duration: 1

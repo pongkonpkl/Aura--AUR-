@@ -35,7 +35,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         });
         setIsEngineReady(true);
       } catch (e) {
-        setIsEngineReady(false);
+        // Suppress the offline modal for GitHub Pages deployment demo
+        // setIsEngineReady(false);
       }
     };
 
@@ -44,7 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         await fetch('http://localhost:8000/heartbeat');
         addLog('Quantum heartbeat synchronized with global ledger');
       } catch (e) {
-        // Silent error, diagnostic overlay handles it
+        addLog('Running in offline demo mode. Engine unreachable.');
       }
     };
 
