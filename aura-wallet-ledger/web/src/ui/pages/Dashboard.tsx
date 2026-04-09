@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
-  X, AlertCircle, CheckCircle2, RefreshCw 
+  X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -12,7 +12,10 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | null>(null);
+  const [isSeedRevealed, setIsSeedRevealed] = useState(false);
+  
+  const MOCK_SEED = ["journey", "quantum", "sovereign", "node", "ledger", "block", "hash", "encrypt", "presence", "network", "aura", "eternal"];
   const [logs, setLogs] = useState<string[]>([
     'Quantum presence verified...',
     'Broadcasting sovereign heartbeats...',
@@ -144,6 +147,62 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         </div>
       )}
 
+      {/* Security (Seed Phrase) Modal */}
+      {activeModal === 'seed' && (
+        <div className="modal-overlay" onClick={() => { setActiveModal(null); setIsSeedRevealed(false); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-500/10 text-red-400 rounded-xl"><Key size={20}/></div>
+                <h2 className="text-xl font-bold">Secret Recovery Phrase</h2>
+              </div>
+              <button onClick={() => { setActiveModal(null); setIsSeedRevealed(false); }} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
+            </div>
+            
+            <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-2xl mb-6 flex gap-4">
+              <AlertCircle size={24} className="text-red-400 flex-shrink-0" />
+              <p className="text-sm text-white/70">
+                <strong className="text-red-400 block mb-1">Never share this phrase.</strong>
+                Anyone with these 12 words can access your Sovereign Node and steal your tokens. Aura support will never ask for this.
+              </p>
+            </div>
+
+            <div className="relative group">
+              <div className={`grid grid-cols-3 gap-3 transition-all duration-500 ${!isSeedRevealed ? 'blur-md opacity-50 select-none' : ''}`}>
+                {MOCK_SEED.map((word, idx) => (
+                  <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                    <span className="text-xs text-white/30 font-mono w-4">{idx + 1}</span>
+                    <span className="font-mono text-sm font-bold text-indigo-300">{word}</span>
+                  </div>
+                ))}
+              </div>
+              
+              {!isSeedRevealed && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <button 
+                    onClick={() => setIsSeedRevealed(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-2xl hover:bg-white/90 transition-all hover:scale-105"
+                  >
+                    <Eye size={18} /> Click to Reveal Phrase
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {isSeedRevealed && (
+              <div className="mt-6 flex justify-center">
+                 <button 
+                  onClick={() => setIsSeedRevealed(false)}
+                  className="flex items-center gap-2 text-sm text-white/40 hover:text-white transition-all"
+                >
+                  <EyeOff size={16} /> Hide Phrase
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-[1400px] mx-auto space-y-8">
         
         {/* Header - Commander Grade */}
@@ -168,8 +227,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             </div>
           </div>
           
-          <div className="flex items-center gap-3 mt-6 md:mt-0">
-            {/* Action buttons moved to Treasury block for better context */}
+          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 mt-6 md:mt-0 shadow-xl">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 bg-indigo-500/20 text-indigo-300 rounded-xl font-bold text-sm flex items-center gap-2 border border-indigo-500/20"
+            >
+              <Home size={16}/> <span className="hidden md:inline">Home</span>
+            </button>
+            <button 
+              onClick={() => setActiveModal('seed')}
+              className="px-5 py-2.5 hover:bg-white/10 text-white/50 hover:text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2"
+            >
+              <Key size={16}/> <span className="hidden md:inline">Security</span>
+            </button>
+            <button 
+              onClick={onLogout}
+              className="px-5 py-2.5 hover:bg-red-500/10 text-white/50 hover:text-red-400 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
+            >
+              <LogOut size={16}/> <span className="hidden md:inline">Lock Wallet</span>
+            </button>
           </div>
         </header>
 
@@ -305,9 +381,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
             <button 
               onClick={onLogout}
-              className="w-full py-4 text-xs font-bold text-white/20 hover:text-red-400 transition-all uppercase tracking-widest border border-white/5 rounded-2xl hover:border-red-400/20"
+              className="w-full py-4 text-xs font-bold text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all uppercase tracking-widest border border-red-500/10 rounded-2xl shadow-lg"
             >
-              Sign out of Sovereign Node
+              Disconnect Node
             </button>
           </div>
 
