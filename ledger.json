@@ -1,0 +1,19 @@
+{
+  "symbol": "AUR",
+  "decimals": 18,
+  "last_mint": "2026-04-09",
+  "total_supply": "1001000000000000000000",
+  "balances": {
+    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "1001000000000000000000"
+  },
+  "history": [
+    {
+      "id": "mint-1775724085.456887",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "amount_atom": "1000000000000000000",
+      "created_at": "2026-04-09T15:41:25.457252Z"
+    }
+  ]
+}
