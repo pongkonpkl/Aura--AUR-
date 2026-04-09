@@ -1,93 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
 :root {
   font-family: 'Outfit', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
   background-color: #050510;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
-  background: radial-gradient(circle at 50% 50%, #0a0a20 0%, #050510 100%);
+  background: radial-gradient(circle at 50% 50%, #0a0a20 0%, #030308 100%);
 }
 
-#root {
-  width: 100%;
-}
-
-/* Celestial Background */
+/* Premium Celestial Background */
 .celestial-bg {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   pointer-events: none;
   z-index: -1;
   background: 
-    radial-gradient(circle at 20% 30%, rgba(60, 100, 255, 0.15) 0%, transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(130, 80, 255, 0.1) 0%, transparent 40%);
+    radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.03) 0%, transparent 60%);
 }
 
-.scrolly-section {
-  height: 100vh;
-  width: 100%;
+.celestial-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
+  opacity: 0.15;
+  mix-blend-mode: overlay;
+}
+
+/* Advanced Glassmorphism */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.glass-panel-accent {
+  background: rgba(124, 58, 237, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 2rem;
+  z-index: 1000;
+  animation: fade-in 0.3s ease-out;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 450px;
+  padding: 2.5rem;
+  border-radius: 2rem;
+  background: rgba(10, 10, 30, 0.8);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  box-shadow: 0 0 50px rgba(124, 58, 237, 0.2);
+  animation: scale-up 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* Pro Widgets & Elements */
+.glow-border {
   position: relative;
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
+.glow-border::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.5), transparent, rgba(124, 58, 237, 0.5));
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.3;
 }
 
-.glow-text {
-  text-shadow: 0 0 20px rgba(100, 150, 255, 0.5);
+.pulse-ring {
+  position: absolute;
+  inset: -10px;
+  border: 2px solid rgba(79, 70, 229, 0.3);
+  border-radius: 50%;
+  animation: pulse-out 2s infinite ease-out;
 }
 
-.btn-celestial {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  padding: 0.8rem 2rem;
-  border-radius: 99px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.btn-celestial:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 30px -5px rgba(79, 70, 229, 0.6);
+@keyframes scale-up {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-@keyframes pulse-soft {
-  0% { opacity: 0.5; }
-  50% { opacity: 1; }
-  100% { opacity: 0.5; }
+@keyframes pulse-out {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
-.aura-loader {
-  animation: pulse-soft 2s infinite ease-in-out;
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
+
+.logo-glow {
+  filter: drop-shadow(0 0 15px rgba(124, 58, 237, 0.4));
 }
