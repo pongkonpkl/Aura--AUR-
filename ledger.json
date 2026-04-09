@@ -2,36 +2,18 @@
   "symbol": "AUR",
   "decimals": 18,
   "last_mint": "2026-04-09",
-  "total_supply": "2000990000000000000000",
+  "total_supply": "1000000000000000000",
   "balances": {
-    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "1000000000000000000000",
-    "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf": "1000990000000000000000"
+    "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf": "1000000000000000000"
   },
   "history": [
     {
-      "id": "tx-1775726401.545316",
-      "event_type": "transfer",
-      "from_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
-      "to_address": "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf",
-      "amount_atom": "1000000000000000000",
-      "burn_penalty": "10000000000000000",
-      "created_at": "2026-04-09T16:20:01.545954Z"
-    },
-    {
-      "id": "tx-genesis-welcome",
-      "event_type": "mining_reward",
-      "from_address": "Aura Parliament",
-      "to_address": "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf",
-      "amount_atom": "1000000000000000000000",
-      "created_at": "2026-04-09T16:00:00.000000Z"
-    },
-    {
-      "id": "mint-1775724085.456887",
+      "id": "mint-1775726620.503578",
       "event_type": "mining_reward",
       "from_address": "System",
-      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "to_address": "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf",
       "amount_atom": "1000000000000000000",
-      "created_at": "2026-04-09T15:41:25.457252Z"
+      "created_at": "2026-04-09T16:23:40.503617Z"
     }
   ]
 }
