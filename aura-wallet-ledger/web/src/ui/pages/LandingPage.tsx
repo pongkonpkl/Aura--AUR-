@@ -1,7 +1,7 @@
-import React, { useRef, useLayoutEffect } from 'react';
+import React, { useRef, useLayoutEffect, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Coins, Shield, Activity, ChevronDown } from 'lucide-react';
+import { Coins, Shield, Activity, ChevronDown, Lock, ArrowRight, UserPlus, Fingerprint } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -11,6 +11,16 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'create'>('login');
+  const [password, setPassword] = useState('');
+  
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(password.length >= 4) {
+      onLaunch();
+    }
+  };
   
   useLayoutEffect(() => {
     let ctx = gsap.context(() => {
@@ -111,11 +121,83 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
       
       {/* Skip button for better UX */}
       <button 
-        onClick={onLaunch}
+        onClick={() => setShowAuth(true)}
         className="fixed top-6 right-6 z-[100] px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-sm font-bold uppercase tracking-widest transition-all backdrop-blur-md hover:scale-105"
       >
         Skip to App
       </button>
+
+      {showAuth && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-xl animate-in fade-in duration-500">
+          <div className="w-full max-w-md p-8 glass-panel rounded-3xl shadow-[0_0_50px_rgba(124,58,237,0.2)] border border-indigo-500/20 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none" />
+            
+            <div className="relative z-10">
+              <div className="w-16 h-16 flex items-center justify-center rounded-full border-2 border-indigo-500/40 bg-[#0a0a1a] shadow-[0_0_15px_rgba(124,58,237,0.4)] mx-auto mb-6">
+                <span className="text-3xl font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%]">
+                  A
+                </span>
+              </div>
+              
+              <h2 className="text-2xl font-bold text-center mb-2">
+                {authMode === 'login' ? 'Unlock Sovereign Node' : 'Initialize New Node'}
+              </h2>
+              <p className="text-sm text-center text-white/50 mb-8">
+                {authMode === 'login' 
+                  ? 'Enter your master sequence to synchronize'
+                  : 'Establish a new sovereign identity on the network'
+                }
+              </p>
+
+              <form onSubmit={handleAuthSubmit} className="space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">
+                    {authMode === 'login' ? 'Master Password' : 'Create Master Password'}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••••••" 
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 focus:border-indigo-500/50 outline-none transition-all placeholder:text-white/20 font-mono" 
+                      required
+                      minLength={4}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-600/20"
+                >
+                  {authMode === 'login' ? (
+                    <><Fingerprint size={18} /> Authenticate & Sync</>
+                  ) : (
+                    <><UserPlus size={18} /> Generate Identity</>
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <button 
+                  onClick={() => setAuthMode(authMode === 'login' ? 'create' : 'login')}
+                  className="text-xs font-bold text-indigo-400/50 hover:text-indigo-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2 w-full py-3"
+                >
+                  {authMode === 'login' ? 'Create New Node Instead' : 'Access Existing Node'}
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+              
+              <div className="mt-4 text-center">
+                 <button onClick={() => setShowAuth(false)} className="text-xs text-white/30 hover:text-white transition-colors">Return to Landing</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="scrolly-container">
         {/* Dynamic Background Overlay */}
@@ -191,7 +273,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
           {/* SCENE 4 (CTA) */}
           <div className="story-text scene-4 mt-20">
             <button 
-              onClick={onLaunch}
+              onClick={() => setShowAuth(true)}
               className="group relative px-12 py-5 md:px-16 md:py-6 bg-white text-black font-bold rounded-2xl overflow-hidden transition-all hover:scale-105 active:scale-95 text-lg md:text-xl shadow-[0_0_40px_rgba(255,255,255,0.3)]"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
