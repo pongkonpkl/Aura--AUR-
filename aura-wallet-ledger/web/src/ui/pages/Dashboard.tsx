@@ -31,6 +31,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [cameras, setCameras] = useState<any[]>([]);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+  const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -212,6 +213,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
       setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
       addLog(`Locked ${stakeAmount} AUR into L3 Sovereign Core.`);
+      
+      setActiveModal(null);
+      setStakeAmount("");
+    } catch(e: any) {
+      alert(e.message);
+    }
+    setIsStaking(false);
+  };
+  const handleUnstake = async () => {
+    if(!stakeAmount) return;
+    setIsStaking(true);
+    try {
+      const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
+      if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
+      
+      // MOCK UNSTAKING DELAY to Aura L3 Contract
+      await new Promise(r => setTimeout(r, 1500));
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
+      addLog(`Unlocked ${stakeAmount} AUR from L3 Sovereign Core.`);
       
       setActiveModal(null);
       setStakeAmount("");
@@ -403,41 +424,78 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       {activeModal === 'stake' && (
         <div className="modal-overlay" onClick={() => setActiveModal(null)}>
           <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold flex items-center gap-3">
                 <Lock className="text-emerald-400"/> Sovereign Staking
               </h2>
               <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
             </div>
+
+            {/* Tab Switcher */}
+            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
+              <button 
+                onClick={() => { setStakingTab('stake'); setStakeAmount(""); }}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${stakingTab === 'stake' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-white/40 hover:text-white'}`}
+              >
+                Stake
+              </button>
+              <button 
+                onClick={() => { setStakingTab('unstake'); setStakeAmount(""); }}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${stakingTab === 'unstake' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white'}`}
+              >
+                Unstake
+              </button>
+            </div>
             
             <div className="space-y-6">
-               <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex gap-4">
-                 <Shield size={24} className="text-emerald-400 flex-shrink-0" />
+               <div className={`p-4 border rounded-2xl flex gap-4 transition-colors ${stakingTab === 'stake' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-orange-500/5 border-orange-500/20'}`}>
+                 <Shield size={24} className={stakingTab === 'stake' ? 'text-emerald-400' : 'text-orange-400'} />
                  <p className="text-sm text-white/70">
-                   <strong className="text-emerald-400 block mb-1">Earn 80% of Daily AUR Protocol Yield</strong>
-                   Lock your Aura into the L3 Smart Contract. You can withdraw anytime. Minimum stake is 1 wei.
+                   {stakingTab === 'stake' ? (
+                     <>
+                        <strong className="text-emerald-400 block mb-1">Earn 80% of Daily AUR Protocol Yield</strong>
+                        Lock your Aura into the L3 Smart Contract. You can withdraw anytime. Minimum stake is 1 wei.
+                     </>
+                   ) : (
+                     <>
+                        <strong className="text-orange-400 block mb-1">Unlock Sovereign Capital</strong>
+                        Move your AUR from the L3 Vault back to your Celestial Treasury. There is zero exit fee.
+                     </>
+                   )}
                  </p>
                </div>
 
               <div>
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 flex justify-between">
-                  <span>Amount to Lock (AUR)</span>
-                  <span className="text-indigo-400 cursor-pointer hover:text-indigo-300" onClick={() => setStakeAmount((Number(balanceAtom)/1e18).toString())}>Max: {(Number(balanceAtom) / 1e18).toFixed(4)}</span>
+                  <span>Amount to {stakingTab === 'stake' ? 'Lock' : 'Unlock'} (AUR)</span>
+                  <span 
+                    className="text-indigo-400 cursor-pointer hover:text-indigo-300" 
+                    onClick={() => {
+                        const maxVal = stakingTab === 'stake' ? (Number(balanceAtom)/1e18) : (Number(stakedBalanceAtom)/1e18);
+                        setStakeAmount(maxVal.toString());
+                    }}
+                  >
+                    Max: {stakingTab === 'stake' ? (Number(balanceAtom) / 1e18).toFixed(4) : (Number(stakedBalanceAtom) / 1e18).toFixed(4)}
+                  </span>
                 </label>
                 <input 
                   value={stakeAmount} 
                   onChange={e=>setStakeAmount(e.target.value)} 
                   type="number" 
                   placeholder="0.00" 
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-emerald-500 outline-none transition-all font-bold" 
+                  className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none transition-all font-bold ${stakingTab === 'stake' ? 'focus:border-emerald-500' : 'focus:border-orange-500'}`} 
                 />
               </div>
               <button 
-                disabled={isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > Number(balanceAtom)} 
-                onClick={handleStake} 
-                className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > Number(balanceAtom) ? 'bg-emerald-600/50 text-white/50 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-400'}`}
+                disabled={isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > (stakingTab === 'stake' ? Number(balanceAtom) : Number(stakedBalanceAtom))} 
+                onClick={stakingTab === 'stake' ? handleStake : handleUnstake} 
+                className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${
+                  isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > (stakingTab === 'stake' ? Number(balanceAtom) : Number(stakedBalanceAtom)) 
+                  ? (stakingTab === 'stake' ? 'bg-emerald-600/50' : 'bg-orange-600/50') + ' text-white/50 cursor-not-allowed' 
+                  : (stakingTab === 'stake' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400') + ' text-white'
+                }`}
               >
-                {isStaking ? 'Locking on L3...' : 'Confirm L3 Stake'}
+                {isStaking ? (stakingTab === 'stake' ? 'Locking on L3...' : 'Unlocking...') : (stakingTab === 'stake' ? 'Confirm L3 Stake' : 'Confirm Unlock')}
               </button>
             </div>
           </div>
@@ -622,10 +680,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 </div>
                 <div className="flex gap-3">
                   <button 
-                    onClick={() => setActiveModal('stake')} 
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
+                    onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
                   >
                     Lock & Earn Output
+                  </button>
+                  <button 
+                    onClick={() => { setStakingTab('unstake'); setActiveModal('stake'); }} 
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold flex justify-center items-center gap-2 border border-white/5 transition-all text-sm"
+                  >
+                    Unstake
                   </button>
                 </div>
               </div>
