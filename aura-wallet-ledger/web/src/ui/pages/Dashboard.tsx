@@ -207,6 +207,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('transfer', { from_address: wallet.address, to_address: recipient, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Send Sent. Awaiting GitHub validation.`);
+        // Optimistic Update
+        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
       } else {
         const res = await fetch('http://localhost:8000/tx-submit', {
            method: 'POST',
@@ -223,6 +225,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         const data = await res.json();
         if(!data.ok) throw new Error(data.error);
         addLog(`Transaction sent: ${data.inbox_id}`);
+        // Update Local
+        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
       }
       setActiveModal(null);
       setRecipient("");
@@ -246,6 +250,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Stake Sent. Awaiting GitHub validation.`);
+        // Optimistic Update
+        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+        setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
       } else {
         const res = await fetch('http://localhost:8000/stake-op', {
            method: 'POST',
@@ -285,6 +292,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Unstake Sent. Awaiting GitHub validation.`);
+        // Optimistic Update
+        setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+        setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
       } else {
         const res = await fetch('http://localhost:8000/stake-op', {
            method: 'POST',
