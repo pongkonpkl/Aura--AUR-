@@ -315,7 +315,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
       
       {/* Diagnostic Overlay */}
-      {!isEngineReady && (
+      {!isEngineReady && !isCloudMode && (
         <div className="modal-overlay">
           <div className="modal-content text-center border-red-500/20 shadow-red-500/10 max-w-2xl">
             <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
