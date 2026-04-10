@@ -3,7 +3,7 @@ import {
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
   X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2
+  Copy, Scan, Camera, Maximize2, Lock
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,13 +17,16 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
+  const [stakedBalanceAtom, setStakedBalanceAtom] = useState<string>("0");
   const [recipient, setRecipient] = useState("");
   const [sendAmount, setSendAmount] = useState("");
+  const [stakeAmount, setStakeAmount] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isStaking, setIsStaking] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [cameras, setCameras] = useState<any[]>([]);
@@ -193,6 +196,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     setIsSending(false);
   };
 
+  const handleStake = async () => {
+    if(!stakeAmount) return;
+    setIsStaking(true);
+    try {
+      const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
+      if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
+      
+      // MOCK STAKING DELAY to Aura L3 Contract
+      await new Promise(r => setTimeout(r, 1500));
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
+      addLog(`Locked ${stakeAmount} AUR into L3 Sovereign Core.`);
+      
+      setActiveModal(null);
+      setStakeAmount("");
+    } catch(e: any) {
+      alert(e.message);
+    }
+    setIsStaking(false);
+  };
+
   return (
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
       
@@ -346,7 +370,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 fgColor="#312e81"
                 includeMargin={true}
                 imageSettings={{
-                  // Circular SVG Logo (A on navy)
                   src: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDgiIGZpbGw9IiMxZTFiNGIiIHN0cm9rZT0iIzYzNjZmMSIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHRleHQgeD0iNTAiIHk9IjY1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNTAiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIj5BPC90ZXh0Pgo8L3N2Zz4=",
                   x: undefined, y: undefined, height: 60, width: 60, excavate: true,
                 }}
@@ -363,16 +386,56 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               >
                 {isCopied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
               </button>
-              {isCopied && (
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-emerald-400 uppercase tracking-widest animate-in fade-in slide-in-from-top-1">
-                  Address Copied!
-                </div>
-              )}
             </div>
 
             <p className="text-sm text-white/40 leading-relaxed max-w-xs mx-auto">
               Only send <span className="text-indigo-400 font-bold underline decoration-indigo-500/30">AUR token</span> to this address on the Sovereign Peer Network.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stake Modal */}
+      {activeModal === 'stake' && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Lock className="text-emerald-400"/> Sovereign Staking
+              </h2>
+              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
+            </div>
+            
+            <div className="space-y-6">
+               <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex gap-4">
+                 <Shield size={24} className="text-emerald-400 flex-shrink-0" />
+                 <p className="text-sm text-white/70">
+                   <strong className="text-emerald-400 block mb-1">Earn 80% of Daily AUR Protocol Yield</strong>
+                   Lock your Aura into the L3 Smart Contract. You can withdraw anytime. Minimum stake is 1 wei.
+                 </p>
+               </div>
+
+              <div>
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 flex justify-between">
+                  <span>Amount to Lock (AUR)</span>
+                  <span className="text-indigo-400 cursor-pointer hover:text-indigo-300" onClick={() => setStakeAmount((Number(balanceAtom)/1e18).toString())}>Max: {(Number(balanceAtom) / 1e18).toFixed(4)}</span>
+                </label>
+                <input 
+                  value={stakeAmount} 
+                  onChange={e=>setStakeAmount(e.target.value)} 
+                  type="number" 
+                  placeholder="0.00" 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-emerald-500 outline-none transition-all font-bold" 
+                />
+              </div>
+              <button 
+                disabled={isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > Number(balanceAtom)} 
+                onClick={handleStake} 
+                className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > Number(balanceAtom) ? 'bg-emerald-600/50 text-white/50 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-400'}`}
+              >
+                {isStaking ? 'Locking on L3...' : 'Confirm L3 Stake'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -483,7 +546,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
           <div className="lg:col-span-3 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {/* Global Presence */}
               <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group">
@@ -502,7 +565,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 </div>
               </div>
 
-              {/* Shared Pool */}
+              {/* Celestial Treasury (Liquid) */}
               <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-3xl rounded-full" />
                 <div className="flex items-center gap-4 mb-6">
@@ -511,11 +574,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   </div>
                   <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Celestial Treasury</span>
                 </div>
-                <div className="space-y-1 mb-8">
-                  <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
-                    {(Number(balanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-white/40"> AUR</span>
-                  </p>
-                  <p className="text-sm text-white/30 font-medium">Available Balance</p>
+                <div className="flex justify-between items-end mb-8 space-y-1">
+                  <div>
+                    <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
+                      {(Number(balanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-white/40"> AUR</span>
+                    </p>
+                    <p className="text-sm text-white/30 font-medium">Liquid Balance</p>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button 
@@ -533,19 +598,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 </div>
               </div>
 
-              {/* Presence Pulse (The replacement for manual mining) */}
+              {/* Sovereign Staking (PoS) */}
+              <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-emerald-500/10">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                      <Lock size={24} />
+                    </div>
+                    <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Stake</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20">L3 Vault</span>
+                </div>
+                <div className="space-y-1 mb-8">
+                  <p className="text-5xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
+                    {(Number(stakedBalanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-emerald-400/40"> AUR</span>
+                  </p>
+                  <p className="text-sm text-emerald-400/60 font-medium">Locked (Earning 80% Daily Yield)</p>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setActiveModal('stake')} 
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
+                  >
+                    Lock & Earn Output
+                  </button>
+                </div>
+              </div>
+
+              {/* Presence Pulse (PoP) */}
               <div className="glass-panel-accent p-8 rounded-3xl relative overflow-hidden">
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-500/10 blur-[80px]" />
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="p-3 bg-white/10 rounded-xl text-white relative">
-                    <div className="pulse-ring" />
-                    <Activity size={24} className="relative z-10" />
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white/10 rounded-xl text-white relative">
+                      <div className="pulse-ring" />
+                      <Activity size={24} className="relative z-10" />
+                    </div>
+                    <span className="text-sm font-bold text-white uppercase tracking-widest">Presence Drop</span>
                   </div>
-                  <span className="text-sm font-bold text-white uppercase tracking-widest">Presence Sync</span>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-white/10 text-white rounded-md">PoP Claim</span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xl font-bold">Autonomous Protocol</p>
-                  <p className="text-sm text-white/40 font-medium">Auto-broadcasting heartbeats...</p>
+                  <p className="text-xl font-bold">Autonomous Airdrop</p>
+                  <p className="text-sm text-indigo-300 font-medium">Auto-broadcasting (20% Base Yield)</p>
                 </div>
               </div>
 
