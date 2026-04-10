@@ -58,15 +58,18 @@ def get_ledger():
 def get_wallet_summary(address: str):
     ledger = load_json(LEDGER_FILE)
     balances = ledger.get("balances", {})
+    staked_balances = ledger.get("staked_balances", {})
     history = ledger.get("history", [])
     
     balance = balances.get(address, "0")
+    staked_balance = staked_balances.get(address, "0")
     
     # Filter recent events for this address
-    my_events = [ev for ev in history if ev.get("from_address") == address or ev.get("to_address") == address]
+    my_events = [ev for ev in history if ev.get("from_address") == address or ev.get("to_address") == address or ev.get("address") == address]
     
     return {
         "balance_atom": str(balance),
+        "staked_balance_atom": str(staked_balance),
         "recent_events": my_events[:50],
         "pending_txs": []
     }
@@ -134,6 +137,62 @@ async def tx_submit(request: Request):
     # Push to GitHub
     auto_push_git()
     
+    return {"ok": True, "inbox_id": new_event["id"]}
+
+@app.post("/stake-op")
+async def stake_op(request: Request):
+    data = await request.json()
+    op = data.get("op") # "stake" or "unstake"
+    tx = data.get("tx", {})
+    signature = data.get("signature")
+    
+    address = tx.get("address")
+    amount_atom = int(tx.get("amount_atom", 0))
+    
+    if not signature:
+        return {"ok": False, "error": "Missing digital signature"}
+        
+    try:
+        message_str = f"AUR_{op.upper()}:{address}:{amount_atom}"
+        message = encode_defunct(text=message_str)
+        recovered_address = Account.recover_message(message, signature=signature)
+        
+        if recovered_address.lower() != address.lower():
+            return {"ok": False, "error": "Invalid digital signature"}
+    except Exception as e:
+        return {"ok": False, "error": f"Signature verification failed: {e}"}
+    
+    if amount_atom <= 0:
+        return {"ok": False, "error": "Invalid amount"}
+        
+    ledger = load_json(LEDGER_FILE)
+    balances = ledger.setdefault("balances", {})
+    staked = ledger.setdefault("staked_balances", {})
+    
+    liq_bal = int(balances.get(address, "0"))
+    stk_bal = int(staked.get(address, "0"))
+    
+    if op == "stake":
+        if liq_bal < amount_atom: return {"ok": False, "error": "Insufficient balance"}
+        balances[address] = str(liq_bal - amount_atom)
+        staked[address] = str(stk_bal + amount_atom)
+    elif op == "unstake":
+        if stk_bal < amount_atom: return {"ok": False, "error": "Insufficient staked balance"}
+        staked[address] = str(stk_bal - amount_atom)
+        balances[address] = str(liq_bal + amount_atom)
+    else:
+        return {"ok": False, "error": "Invalid operation"}
+        
+    new_event = {
+        "id": f"{op}-{datetime.utcnow().timestamp()}",
+        "event_type": op,
+        "address": address,
+        "amount_atom": str(amount_atom),
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    ledger.setdefault("history", []).insert(0, new_event)
+    save_json(LEDGER_FILE, ledger)
+    auto_push_git()
     return {"ok": True, "inbox_id": new_event["id"]}
 
 NODES_FILE = "nodes.json"
@@ -210,20 +269,28 @@ async def midnight_mint_task():
             nodes = get_nodes()
             presence = nodes.get("presence", {})
             
-            # Identify active addresses in last 24h (all UTC)
-            active_addresses = []
+            # Identify active addresses in last 24h (all UTC) + Stakers
+            active_addresses = set()
             for addr, ts in presence.items():
                 try:
                     p_time = datetime.fromisoformat(ts.replace("Z", ""))
                     if (now_utc - p_time).total_seconds() < 86400:
-                         active_addresses.append(addr)
+                         active_addresses.add(addr)
                 except: pass
+            
+            staked_balances = ledger.get("staked_balances", {})
+            for addr, bstr in staked_balances.items():
+                if int(bstr) > 0:
+                    active_addresses.add(addr)
             
             # If no heartbeats found (unlikely), fallback to local identity
             if not active_addresses:
                 identity = load_json(IDENTITY_FILE)
                 if identity.get("address"):
-                    active_addresses = [identity["address"]]
+                    active_addresses.add(identity["address"])
+            
+            # convert set to list for stable processing
+            active_addresses = list(active_addresses)
             
             if active_addresses:
                 total_reward = 1_000_000_000_000_000_000 # 1 AUR

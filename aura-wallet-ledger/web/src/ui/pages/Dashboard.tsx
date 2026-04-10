@@ -17,7 +17,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
@@ -32,6 +32,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [cameras, setCameras] = useState<any[]>([]);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
+  const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
+  const [isCloudMode, setIsCloudMode] = useState(!!(localStorage.getItem('aura_cloud_token')));
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -126,13 +128,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         const response = await fetch(`${LOCAL_ENGINE_URL}/wallet-summary?address=${wallet.address}`);
         const data = await response.json();
         setBalanceAtom(data.balance_atom || "0");
+        setStakedBalanceAtom(data.staked_balance_atom || "0");
       } catch(e) {
         // Fallback: GitHub Raw Ledger (Sovereign Proof)
         try {
            const response = await fetch(`${REPO_RAW_BASE}/ledger.json`);
            const ledger = await response.json();
            const balances = ledger.balances || {};
+           const staked = ledger.staked_balances || {};
            setBalanceAtom(balances[wallet.address] || "0");
+           setStakedBalanceAtom(staked[wallet.address] || "0");
         } catch(err) {
            addLog("Complete connection failure. Proof unavailable.");
         }
@@ -169,6 +174,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     };
   }, [wallet]);
 
+  const submitCloudTx = async (op: string, tx: any, signature: string) => {
+    const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
+    const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
+    
+    const res = await fetch(GITHUB_API, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': `token ${cloudToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        event_type: 'cloud_tx',
+        client_payload: { op, tx, signature }
+      })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Cloud Validator Error: ${txt}`);
+    }
+  };
+
   const handleSend = async () => {
     if(!recipient || !sendAmount) return;
     setIsSending(true);
@@ -177,22 +204,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const message = `AUR_TX:${wallet.address}:${recipient}:${amountAtom}`;
       const signature = await wallet.signMessage(message);
       
-      const res = await fetch('http://localhost:8000/tx-submit', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-            tx: {
-               from_address: wallet.address,
-               to_address: recipient,
-               amount_atom: amountAtom.toString()
-            },
-            signature
-         })
-      });
-      const data = await res.json();
-      if(!data.ok) throw new Error(data.error);
+      if (isCloudMode) {
+        await submitCloudTx('transfer', { from_address: wallet.address, to_address: recipient, amount_atom: amountAtom.toString() }, signature);
+        addLog(`Cloud Send Sent. Awaiting GitHub validation.`);
+      } else {
+        const res = await fetch('http://localhost:8000/tx-submit', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+              tx: {
+                 from_address: wallet.address,
+                 to_address: recipient,
+                 amount_atom: amountAtom.toString()
+              },
+              signature
+           })
+        });
+        const data = await res.json();
+        if(!data.ok) throw new Error(data.error);
+        addLog(`Transaction sent: ${data.inbox_id}`);
+      }
       setActiveModal(null);
-      addLog(`Transaction sent: ${data.inbox_id}`);
       setRecipient("");
       setSendAmount("");
     } catch(e: any) {
@@ -208,11 +240,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
       if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
       
-      // MOCK STAKING DELAY to Aura L3 Contract
-      await new Promise(r => setTimeout(r, 1500));
-      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
-      addLog(`Locked ${stakeAmount} AUR into L3 Sovereign Core.`);
+      const message = `AUR_STAKE:${wallet.address}:${amountAtom}`;
+      const signature = await wallet.signMessage(message);
+      
+      if (isCloudMode) {
+        await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
+        addLog(`Cloud Stake Sent. Awaiting GitHub validation.`);
+      } else {
+        const res = await fetch('http://localhost:8000/stake-op', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+              op: 'stake',
+              tx: { address: wallet.address, amount_atom: amountAtom.toString() },
+              signature
+           })
+        });
+        const data = await res.json();
+        if(!data.ok) throw new Error(data.error);
+        
+        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+        setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
+        addLog(`Locked ${stakeAmount} AUR into L3 Sovereign Core.`);
+      }
       
       setActiveModal(null);
       setStakeAmount("");
@@ -221,6 +271,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     }
     setIsStaking(false);
   };
+  
   const handleUnstake = async () => {
     if(!stakeAmount) return;
     setIsStaking(true);
@@ -228,11 +279,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
       if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
       
-      // MOCK UNSTAKING DELAY to Aura L3 Contract
-      await new Promise(r => setTimeout(r, 1500));
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
-      addLog(`Unlocked ${stakeAmount} AUR from L3 Sovereign Core.`);
+      const message = `AUR_UNSTAKE:${wallet.address}:${amountAtom}`;
+      const signature = await wallet.signMessage(message);
+      
+      if (isCloudMode) {
+        await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
+        addLog(`Cloud Unstake Sent. Awaiting GitHub validation.`);
+      } else {
+        const res = await fetch('http://localhost:8000/stake-op', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+              op: 'unstake',
+              tx: { address: wallet.address, amount_atom: amountAtom.toString() },
+              signature
+           })
+        });
+        const data = await res.json();
+        if(!data.ok) throw new Error(data.error);
+        
+        setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+        setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
+        addLog(`Unlocked ${stakeAmount} AUR from L3 Sovereign Core.`);
+      }
       
       setActiveModal(null);
       setStakeAmount("");
@@ -558,6 +627,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         </div>
       )}
 
+      {/* Cloud Settings Modal */}
+      {activeModal === 'cloud' && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <Globe className="text-blue-400"/> Sovereign Cloud Node
+              </h2>
+              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
+            </div>
+            
+            <div className="space-y-6">
+               <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl flex gap-4">
+                 <Globe size={24} className="text-blue-400 flex-shrink-0" />
+                 <p className="text-sm text-white/70">
+                   <strong className="text-blue-400 block mb-1">Enable Cloud Validation</strong>
+                   Connect to your GitHub Repository to bypass "HTTPS Restricted" limits and validate transactions remotely without your PC.
+                 </p>
+               </div>
+
+              <div>
+                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">
+                  GitHub Personal Access Token (PAT)
+                </label>
+                <input 
+                  value={cloudToken} 
+                  onChange={(e) => {
+                    setCloudToken(e.target.value);
+                    localStorage.setItem('aura_cloud_token', e.target.value);
+                    setIsCloudMode(!!e.target.value);
+                  }} 
+                  type="password" 
+                  placeholder="ghp_..." 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-blue-500 outline-none transition-all font-mono" 
+                />
+              </div>
+              <p className="text-xs text-white/30 italic text-center">
+                Your token is encrypted and stored locally in this browser.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-[1400px] mx-auto space-y-8">
         
         {/* Header - Commander Grade */}
@@ -594,6 +707,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               className="px-5 py-2.5 hover:bg-white/10 text-white/50 hover:text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2"
             >
               <Key size={16}/> <span className="hidden md:inline">Security</span>
+            </button>
+            <button 
+              onClick={() => setActiveModal('cloud')}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${isCloudMode ? 'bg-blue-500/20 text-blue-300 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
+            >
+              <Globe size={16}/> <span className="hidden md:inline">Cloud Node</span>
             </button>
             <button 
               onClick={onLogout}
