@@ -155,7 +155,21 @@ async def heartbeat(request: Request):
         return {"ok": False, "error": "No address"}
     update_node_presence(address)
     print(f"[HEARTBEAT] Node Presence Verified: {address}")
-    return {"ok": True}
+    
+    # Optional: Return active count immediately
+    nodes = get_nodes()
+    presence = nodes.get("presence", {})
+    active_count = 0
+    now = datetime.utcnow()
+    for addr, ts in presence.items():
+        try:
+            p_time = datetime.fromisoformat(ts.replace("Z", ""))
+            if (now - p_time).total_seconds() < 86400: # 24 hours
+                active_count += 1
+        except:
+            pass
+            
+    return {"ok": True, "active_count": max(1, active_count)}
 
 @app.get("/network-stats")
 def get_network_stats():

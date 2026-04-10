@@ -115,6 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       } catch (e) {
         // Failover to GitHub for stats (Mock or static if available)
         setNetworkStats({ activeNodes: 12, sharedPool: "1.0000" });
+        setIsEngineReady(false);
       }
     };
 
@@ -131,7 +132,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
            const ledger = await response.json();
            const balances = ledger.balances || {};
            setBalanceAtom(balances[wallet.address] || "0");
-           addLog("Local node unreachable. Viewing Sovereign Proof via GitHub...");
         } catch(err) {
            addLog("Complete connection failure. Proof unavailable.");
         }
@@ -147,7 +147,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         });
         addLog(`Quantum heartbeat synchronized for ${wallet.address.slice(0,8)}...`);
       } catch (e) {
-        // Heartbeat is only possible locally
+        if (window.location.protocol === 'https:') {
+            addLog("HTTPS blocked local heartbeat. Open localhost:5173 to mine.");
+        } else {
+            addLog("Heartbeat failed. Is fahsai_engine.py running?");
+        }
       }
     };
 
