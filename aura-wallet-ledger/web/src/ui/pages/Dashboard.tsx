@@ -34,6 +34,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
   const [isCloudMode, setIsCloudMode] = useState(!!(localStorage.getItem('aura_cloud_token')));
+  const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(0);
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -123,12 +124,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     };
 
     const fetchBalance = async () => {
+      // Prevent UI bounce-back: If a cloud operation was sent in the last 90 seconds, 
+      // do not overwrite the optimistic UI state with (potentially) stale server data.
+      const isCoolingDown = Date.now() - lastCloudOpTime < 90000;
+
       try {
         // Primary: Local Engine
         const response = await fetch(`${LOCAL_ENGINE_URL}/wallet-summary?address=${wallet.address}`);
         const data = await response.json();
-        setBalanceAtom(data.balance_atom || "0");
-        setStakedBalanceAtom(data.staked_balance_atom || "0");
+        
+        if (!isCoolingDown) {
+          setBalanceAtom(data.balance_atom || "0");
+          setStakedBalanceAtom(data.staked_balance_atom || "0");
+        }
       } catch(e) {
         // Fallback: GitHub Raw Ledger (Sovereign Proof)
         try {
@@ -136,8 +144,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
            const ledger = await response.json();
            const balances = ledger.balances || {};
            const staked = ledger.staked_balances || {};
-           setBalanceAtom(balances[wallet.address] || "0");
-           setStakedBalanceAtom(staked[wallet.address] || "0");
+           
+           if (!isCoolingDown) {
+             setBalanceAtom(balances[wallet.address] || "0");
+             setStakedBalanceAtom(staked[wallet.address] || "0");
+           }
         } catch(err) {
            addLog("Complete connection failure. Proof unavailable.");
         }
@@ -172,7 +183,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       clearInterval(statsInterval);
       clearInterval(heartbeatInterval);
     };
-  }, [wallet]);
+  }, [wallet, lastCloudOpTime]);
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
     const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
@@ -207,6 +218,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('transfer', { from_address: wallet.address, to_address: recipient, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Send Sent. Awaiting GitHub validation.`);
+        setLastCloudOpTime(Date.now());
         // Optimistic Update
         setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
       } else {
@@ -250,6 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Stake Sent. Awaiting GitHub validation.`);
+        setLastCloudOpTime(Date.now());
         // Optimistic Update
         setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
         setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
@@ -292,6 +305,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       if (isCloudMode) {
         await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
         addLog(`Cloud Unstake Sent. Awaiting GitHub validation.`);
+        setLastCloudOpTime(Date.now());
         // Optimistic Update
         setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
         setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
