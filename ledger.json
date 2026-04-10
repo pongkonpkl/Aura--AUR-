@@ -2,12 +2,21 @@
   "symbol": "AUR",
   "decimals": 18,
   "last_mint": "2026-04-10",
-  "total_supply": "3000000000000000000",
+  "total_supply": "4000000000000000000",
   "balances": {
     "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf": "1000000000000000000",
-    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "2000000000000000000"
+    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "2000000000000000000",
+    "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253": "1000000000000000000"
   },
   "history": [
+    {
+      "id": "test-grant-1775736120",
+      "event_type": "test_grant",
+      "from_address": "System",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "1000000000000000000",
+      "created_at": "2026-04-11T01:36:20.000000Z"
+    },
     {
       "id": "399f6fe129df254f777ad9001e270aecf2fe627d2f5ea1c11a5e7db14eb8287e",
       "event_type": "mining_reward",
