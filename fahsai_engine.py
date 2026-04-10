@@ -7,6 +7,8 @@ from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from eth_account import Account
+from eth_account.messages import encode_defunct
 
 app = FastAPI(title="Aura: Fahsai Engine")
 
@@ -73,9 +75,25 @@ def get_wallet_summary(address: str):
 async def tx_submit(request: Request):
     data = await request.json()
     tx = data.get("tx", {})
+    signature = data.get("signature")
+    
     from_address = tx.get("from_address")
     to_address = tx.get("to_address")
     amount_atom = int(tx.get("amount_atom", 0))
+    
+    if not signature:
+        return {"ok": False, "error": "Missing digital signature"}
+        
+    try:
+        # Reconstruct the exact message the client signed
+        message_str = f"AUR_TX:{from_address}:{to_address}:{amount_atom}"
+        message = encode_defunct(text=message_str)
+        recovered_address = Account.recover_message(message, signature=signature)
+        
+        if recovered_address.lower() != from_address.lower():
+            return {"ok": False, "error": "Invalid digital signature"}
+    except Exception as e:
+        return {"ok": False, "error": f"Signature verification failed: {e}"}
     
     if amount_atom <= 0:
         return {"ok": False, "error": "Invalid amount"}

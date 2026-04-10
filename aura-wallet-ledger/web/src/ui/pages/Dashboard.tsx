@@ -2,67 +2,178 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
-  X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff
+  X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
+  Copy, Scan, Camera, Maximize2
 } from 'lucide-react';
+import { ethers } from 'ethers';
+import { QRCodeSVG } from 'qrcode.react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface DashboardProps {
   onLogout: () => void;
+  wallet: ethers.Wallet;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
   const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
-  const MOCK_SEED = ["journey", "quantum", "sovereign", "node", "ledger", "block", "hash", "encrypt", "presence", "network", "aura", "eternal"];
+  const [balanceAtom, setBalanceAtom] = useState<string>("0");
+  const [recipient, setRecipient] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [cameras, setCameras] = useState<any[]>([]);
+  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+
+  const MOCK_SEED = wallet.mnemonic?.phrase?.split(' ') || [];
   const [logs, setLogs] = useState<string[]>([
     'Quantum presence verified...',
     'Broadcasting sovereign heartbeats...',
-    'Identity: oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ',
+    `Identity: ${wallet.address}`,
   ]);
 
   const addLog = (msg: string) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
   };
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(wallet.address);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+    addLog("Address copied to clipboard.");
+  };
+
+  // Scanner Logic
+  useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
+    
+    if (isScannerOpen) {
+      // 1. Get Cameras
+      Html5Qrcode.getCameras().then(devices => {
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+          // Default to back camera if searching for "back"
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back'));
+          setActiveCameraId(backCamera ? backCamera.id : devices[0].id);
+        }
+      }).catch(err => addLog(`Camera Access Error: ${err}`));
+
+      html5QrCode = new Html5Qrcode("scanner-region");
+    }
+
+    return () => {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(() => {});
+      }
+    };
+  }, [isScannerOpen]);
+
+  const startScanning = (cameraId: string) => {
+    const html5QrCode = new Html5Qrcode("scanner-region");
+    html5QrCode.start(
+      cameraId,
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        if (decodedText.startsWith('0x')) {
+          setRecipient(decodedText);
+          setIsScannerOpen(false);
+          addLog(`Recipient identified: ${decodedText.slice(0,10)}...`);
+        }
+      },
+      (errorMessage) => {}
+    ).catch(err => addLog(`Scan Start Failure: ${err}`));
+  };
+
+  useEffect(() => {
+    if (isScannerOpen && activeCameraId) {
+      startScanning(activeCameraId);
+    }
+  }, [isScannerOpen, activeCameraId]);
+
   // Autonomous Heartbeat Loop
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://localhost:8000/network_stats');
+        const response = await fetch('http://localhost:8000/network-stats');
         const data = await response.json();
         setNetworkStats({ 
           activeNodes: data.active_nodes, 
-          sharedPool: data.daily_pool.toFixed(4) 
+          sharedPool: "1.0000" 
         });
         setIsEngineReady(true);
       } catch (e) {
-        // Suppress the offline modal for GitHub Pages deployment demo
-        // setIsEngineReady(false);
       }
+    };
+
+    const fetchBalance = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/wallet-summary?address=${wallet.address}`);
+        const data = await response.json();
+        setBalanceAtom(data.balance_atom || "0");
+      } catch(e) {}
     };
 
     const heartbeat = async () => {
       try {
-        await fetch('http://localhost:8000/heartbeat');
-        addLog('Quantum heartbeat synchronized with global ledger');
+        await fetch('http://localhost:8000/heartbeat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ address: wallet.address })
+        });
+        addLog(`Quantum heartbeat synchronized for ${wallet.address.slice(0,8)}...`);
       } catch (e) {
         addLog('Running in offline demo mode. Engine unreachable.');
       }
     };
 
     fetchStats();
+    fetchBalance();
     heartbeat();
     
-    const statsInterval = setInterval(fetchStats, 5000);
+    const statsInterval = setInterval(() => { fetchStats(); fetchBalance(); }, 5000);
     const heartbeatInterval = setInterval(heartbeat, 30000);
 
     return () => {
       clearInterval(statsInterval);
       clearInterval(heartbeatInterval);
     };
-  }, []);
+  }, [wallet]);
+
+  const handleSend = async () => {
+    if(!recipient || !sendAmount) return;
+    setIsSending(true);
+    try {
+      const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
+      const message = `AUR_TX:${wallet.address}:${recipient}:${amountAtom}`;
+      const signature = await wallet.signMessage(message);
+      
+      const res = await fetch('http://localhost:8000/tx-submit', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            tx: {
+               from_address: wallet.address,
+               to_address: recipient,
+               amount_atom: amountAtom.toString()
+            },
+            signature
+         })
+      });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error);
+      setActiveModal(null);
+      addLog(`Transaction sent: ${data.inbox_id}`);
+      setRecipient("");
+      setSendAmount("");
+    } catch(e: any) {
+      alert(e.message);
+    }
+    setIsSending(false);
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
@@ -109,22 +220,77 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       {/* Send Modal */}
       {activeModal === 'send' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => { setActiveModal(null); setIsScannerOpen(false); }}>
+          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-2xl font-bold">Initiate Transfer</h2>
-              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
+              <button onClick={() => { setActiveModal(null); setIsScannerOpen(false); }} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
             </div>
+            
             <div className="space-y-6">
-              <div>
+              <div className="relative">
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Recipient Address</label>
-                <input type="text" placeholder="oLP8...VQ" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none transition-all" />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input 
+                      value={recipient} 
+                      onChange={e=>setRecipient(e.target.value)} 
+                      type="text" 
+                      placeholder="0x..." 
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-mono text-sm" 
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setIsScannerOpen(!isScannerOpen)}
+                    className={`p-4 rounded-xl transition-all border ${isScannerOpen ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:text-white'}`}
+                  >
+                    <Scan size={20} />
+                  </button>
+                </div>
               </div>
+
+              {isScannerOpen && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="relative bg-black rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+                    <div id="scanner-region" className="w-full aspect-square" />
+                    
+                    {/* Scanner UI Overlays */}
+                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                       <div className="w-64 h-64 border-2 border-indigo-500/50 rounded-3xl relative">
+                          <div className="absolute inset-0 animate-pulse border-2 border-indigo-500 rounded-3xl" />
+                       </div>
+                    </div>
+
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 px-4">
+                      {cameras.length > 1 && (
+                        <button 
+                          onClick={() => {
+                            const nextIdx = (cameras.findIndex(c => c.id === activeCameraId) + 1) % cameras.length;
+                            setActiveCameraId(cameras[nextIdx].id);
+                          }}
+                          className="px-4 py-2 bg-black/60 backdrop-blur-md rounded-full text-xs font-bold flex items-center gap-2 border border-white/10"
+                        >
+                          <Camera size={14} /> Switch Camera
+                        </button>
+                      )}
+                      <button 
+                         onClick={() => setIsScannerOpen(false)}
+                         className="px-4 py-2 bg-red-500/20 backdrop-blur-md rounded-full text-xs font-bold text-red-400 border border-red-500/20"
+                      >
+                         Close Scanner
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Amount (AUR)</label>
-                <input type="number" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none transition-all" />
+                <input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} type="number" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-bold" />
               </div>
-              <button disabled className="w-full py-4 bg-indigo-600/50 text-white/50 font-bold rounded-2xl cursor-not-allowed">Insufficient Balance</button>
+              <button disabled={isSending || !sendAmount || !recipient || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !recipient || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+                {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
+              </button>
             </div>
           </div>
         </div>
@@ -138,11 +304,42 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <h2 className="text-2xl font-bold text-left">Your Deposit ID</h2>
               <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
             </div>
-            <div className="bg-white p-4 rounded-3xl inline-block mb-8">
-              <div className="w-48 h-48 bg-gray-200 rounded-2xl flex items-center justify-center text-black font-bold">QR PLACEHOLDER</div>
+            
+            <div className="bg-white p-6 rounded-[2rem] inline-block mb-8 shadow-[0_0_40px_rgba(124,58,237,0.3)] border border-indigo-500/20">
+              <QRCodeSVG 
+                value={wallet.address} 
+                size={220}
+                level="H"
+                fgColor="#312e81"
+                includeMargin={true}
+                imageSettings={{
+                  // Circular SVG Logo (A on navy)
+                  src: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDgiIGZpbGw9IiMxZTFiNGIiIHN0cm9rZT0iIzYzNjZmMSIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHRleHQgeD0iNTAiIHk9IjY1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNTAiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIj5BPC90ZXh0Pgo8L3N2Zz4=",
+                  x: undefined, y: undefined, height: 60, width: 60, excavate: true,
+                }}
+              />
             </div>
-            <p className="text-xs font-mono text-indigo-400 bg-indigo-500/10 py-3 rounded-xl mb-4">oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ</p>
-            <p className="text-sm text-white/40">Only send AUR token to this address on the Sovereign Peer Network.</p>
+            
+            <div className="relative group mb-6">
+              <p className="text-xs font-mono text-indigo-300 bg-indigo-500/10 py-4 px-6 rounded-2xl break-all line-clamp-2 border border-indigo-500/20 shadow-inner">
+                {wallet.address}
+              </p>
+              <button 
+                onClick={handleCopy}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all ${isCopied ? 'bg-emerald-500 text-white scale-110' : 'bg-white/10 text-white/60 hover:text-white hover:bg-indigo-600'}`}
+              >
+                {isCopied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+              </button>
+              {isCopied && (
+                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-emerald-400 uppercase tracking-widest animate-in fade-in slide-in-from-top-1">
+                  Address Copied!
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-white/40 leading-relaxed max-w-xs mx-auto">
+              Only send <span className="text-indigo-400 font-bold underline decoration-indigo-500/30">AUR token</span> to this address on the Sovereign Peer Network.
+            </p>
           </div>
         </div>
       )}
@@ -222,7 +419,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                   Presence Active
                 </span>
-                <span className="text-xs text-white/40 uppercase tracking-tighter">Identity: oLP8ge...VQ</span>
+                <span className="text-xs text-white/40 uppercase tracking-tighter">Identity: {wallet.address.slice(0,6)}...{wallet.address.slice(-4)}</span>
               </div>
             </div>
           </div>
@@ -283,9 +480,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </div>
                 <div className="space-y-1 mb-8">
                   <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
-                    1.000<span className="text-2xl text-white/40"> AUR</span>
+                    {(Number(balanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-white/40"> AUR</span>
                   </p>
-                  <p className="text-sm text-white/30 font-medium">Daily Shared Distribution</p>
+                  <p className="text-sm text-white/30 font-medium">Available Balance</p>
                 </div>
                 <div className="flex gap-3">
                   <button 

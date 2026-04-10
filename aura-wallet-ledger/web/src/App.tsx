@@ -1,27 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 import LandingPage from './ui/pages/LandingPage';
 import Dashboard from './ui/pages/Dashboard';
 
 const App: React.FC = () => {
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [wallet, setWallet] = useState<ethers.Wallet | null>(null);
   const [view, setView] = useState<'landing' | 'dashboard'>('landing');
 
-  useEffect(() => {
-    // Check if identity exists or session is active
-    const savedIdentity = localStorage.getItem('aura_identity');
-    if (savedIdentity) {
-      // For now, we allow auto-unlock for seamless experience
-      // setIsUnlocked(true);
-    }
-  }, []);
-
-  const handleLaunch = () => {
-    // Navigate to dashboard
+  const handleLaunch = (unlockedWallet: ethers.Wallet) => {
+    setWallet(unlockedWallet);
     setView('dashboard');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('aura_identity');
+    setWallet(null);
     setView('landing');
   };
 
@@ -29,10 +21,10 @@ const App: React.FC = () => {
     <div className="min-h-screen">
       <div className="celestial-bg" />
       
-      {view === 'landing' ? (
+      {view === 'landing' || !wallet ? (
         <LandingPage onLaunch={handleLaunch} />
       ) : (
-        <Dashboard onLogout={handleLogout} />
+        <Dashboard onLogout={handleLogout} wallet={wallet} />
       )}
     </div>
   );
