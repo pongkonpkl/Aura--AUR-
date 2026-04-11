@@ -1,14 +1,67 @@
 {
   "symbol": "AUR",
   "decimals": 18,
-  "last_mint": "2026-04-10",
-  "total_supply": "4000000000000000000",
+  "last_mint": "2026-04-11",
+  "total_supply": "5000000000000000000",
   "balances": {
     "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf": "1000000000000000000",
-    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "2000000000000000000",
-    "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253": "1000000000000000000"
+    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "2166666666666666666",
+    "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253": "1166666666666666666",
+    "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090": "166666666666666666",
+    "0xB3421bEC36bfbFE286d3CF00F200404E74e30896": "166666666666666666",
+    "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9": "166666666666666666",
+    "0x6Ef6af283127d881Cef76587A83378E86701C87f": "166666666666666666"
   },
+  "staked_balances": {},
   "history": [
+    {
+      "id": "e2a386dc169fac16358fc8738bb9ef413460f50e588d8597ebe497ba65d7b836",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "0x6Ef6af283127d881Cef76587A83378E86701C87f",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715506Z"
+    },
+    {
+      "id": "f91a37cb69f5a15d0bfaceb6f183c3f3497cb6d9a7c7278a280c6ea5e81b8fc5",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715503Z"
+    },
+    {
+      "id": "95cb55bc6ad3da5ec3f510b952b441bc08eb0d4e945c527f7e5335d93bc6bc9e",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715499Z"
+    },
+    {
+      "id": "042de1994442e7fcc254a46a088db5bf52ce49b549ab90575a11b3eeba220df3",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715494Z"
+    },
+    {
+      "id": "0214bb1c5228f6693c179436de7627216bec8938f6bceffd2a9dcf8c69c9f87f",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "0xB3421bEC36bfbFE286d3CF00F200404E74e30896",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715485Z"
+    },
+    {
+      "id": "d7c1a8482f808f8d5bbecc1706af8d39c5986fd2263adf50ea30b4adc7a6628d",
+      "event_type": "mining_reward",
+      "from_address": "System",
+      "to_address": "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090",
+      "amount_atom": "166666666666666666",
+      "created_at": "2026-04-11T02:57:21.715468Z"
+    },
     {
       "id": "test-grant-1775736120",
       "event_type": "test_grant",
