@@ -9,6 +9,8 @@ import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
 
+import { supabase } from '../../lib/supabase';
+
 interface DashboardProps {
   onLogout: () => void;
   wallet: ethers.Wallet;
@@ -33,7 +35,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
-  const [isCloudMode, setIsCloudMode] = useState(!!(localStorage.getItem('aura_cloud_token')));
+  const [isCloudMode, setIsCloudMode] = useState(true); // Default to Cloud Mode now
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(0);
   const [isDistributing, setIsDistributing] = useState(false);
 
@@ -106,85 +108,87 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     }
   }, [isScannerOpen, activeCameraId]);
 
-  // Autonomous Heartbeat Loop
+  // Autonomous Heartbeat & Supabase Sync Loop
   useEffect(() => {
-    const fetchStats = async () => {
+    const syncWithSupabase = async () => {
       try {
-        const response = await fetch(`${LOCAL_ENGINE_URL}/network-stats`);
-        const data = await response.json();
+        // 1. Fetch Profile & Balance
+        const { data: profile, error: pError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('wallet_address', wallet.address)
+          .single();
+
+        if (pError && pError.code === 'PGRST116') {
+          // Profile not found, create one (Auto-registration)
+          await supabase.from('profiles').insert({
+            id: (await supabase.auth.getUser()).data.user?.id || undefined, // Use Auth ID if available
+            wallet_address: wallet.address,
+            nickname: 'Than B.R.D.'
+          });
+          addLog("Sovereign Identity Registered in Cloud.");
+        } else if (profile) {
+          setBalanceAtom(profile.total_accumulated?.toString() || "0");
+          setIsEngineReady(true);
+        }
+
+        // 2. Fetch Staked Balance
+        const { data: stake } = await supabase
+          .from('stakes')
+          .select('amount')
+          .eq('user_id', profile?.id)
+          .single();
+        
+        if (stake) {
+          setStakedBalanceAtom(stake.amount?.toString() || "0");
+        }
+
+        // 3. Network Stats (Mocked for now or count profiles)
+        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
         setNetworkStats({ 
-          activeNodes: data.active_nodes, 
+          activeNodes: count || 12, 
           sharedPool: "1.0000" 
         });
-        setIsEngineReady(true);
-      } catch (e) {
-        // Failover to GitHub for stats (Mock or static if available)
-        setNetworkStats({ activeNodes: 12, sharedPool: "1.0000" });
-        setIsEngineReady(false);
-      }
-    };
 
-    const fetchBalance = async () => {
-      // Prevent UI bounce-back: If a cloud operation was sent in the last 120 seconds, 
-      // do not overwrite the optimistic UI state with (potentially) stale server data.
-      const isCoolingDown = Date.now() - lastCloudOpTime < 120000;
-
-      try {
-        // Primary: Local Engine
-        const response = await fetch(`${LOCAL_ENGINE_URL}/wallet-summary?address=${wallet.address}`);
-        const data = await response.json();
-        
-        if (!isCoolingDown) {
-          setBalanceAtom(data.balance_atom || "0");
-          setStakedBalanceAtom(data.staked_balance_atom || "0");
-        }
-      } catch(e) {
-        // Fallback: GitHub Raw Ledger (Sovereign Proof)
-        try {
-           const response = await fetch(`${REPO_RAW_BASE}/ledger.json`);
-           const ledger = await response.json();
-           const balances = ledger.balances || {};
-           const staked = ledger.staked_balances || {};
-           
-           if (!isCoolingDown) {
-             setBalanceAtom(balances[wallet.address] || "0");
-             setStakedBalanceAtom(staked[wallet.address] || "0");
-           }
-        } catch(err) {
-           addLog("Complete connection failure. Proof unavailable.");
-        }
+      } catch (err) {
+        console.error("Supabase sync error:", err);
       }
     };
 
     const heartbeat = async () => {
       try {
-        await fetch(`${LOCAL_ENGINE_URL}/heartbeat`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ address: wallet.address })
-        });
-        addLog(`Quantum heartbeat synchronized for ${wallet.address.slice(0,8)}...`);
-      } catch (e) {
-        if (window.location.protocol === 'https:') {
-            addLog("HTTPS blocked local heartbeat. Open localhost:5173 to mine.");
-        } else {
-            addLog("Heartbeat failed. Is fahsai_engine.py running?");
+        // Log Presence to Supabase mining_logs
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('wallet_address', wallet.address)
+          .single();
+
+        if (profile) {
+          await supabase.from('mining_logs').insert({
+            user_id: profile.id,
+            hash_rate: 1.0, // Base PoHA metric
+            earned_amount: "1000000000000" // Optional: micro-reward per heartbeat
+          });
+          addLog(`Quantum heartbeat synchronized to Cloud.`);
         }
+      } catch (e) {
+        addLog("Cloud Heartbeat failed. Check internet connection.");
       }
     };
 
-    fetchStats();
-    fetchBalance();
+    syncWithSupabase();
     heartbeat();
     
-    const statsInterval = setInterval(() => { fetchStats(); fetchBalance(); }, 5000);
-    const heartbeatInterval = setInterval(heartbeat, 30000);
+    const syncInterval = setInterval(syncWithSupabase, 10000);
+    const heartbeatInterval = setInterval(heartbeat, 60000);
 
     return () => {
-      clearInterval(statsInterval);
+      clearInterval(syncInterval);
       clearInterval(heartbeatInterval);
     };
-  }, [wallet, lastCloudOpTime]);
+  }, [wallet]);
+
 
   const fetchNonce = async (address: string): Promise<number> => {
     try {
@@ -259,37 +263,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const message = `AUR_TX:${nextNonce}:${wallet.address}:${recipient}:${amountAtom}`;
       const signature = await wallet.signMessage(message);
       
-      if (isCloudMode) {
-        await submitCloudTx('transfer', { 
-           from_address: wallet.address, 
-           to_address: recipient, 
-           amount_atom: amountAtom.toString(),
-           nonce: nextNonce 
-        }, signature);
-        addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
-        setLastCloudOpTime(Date.now());
-        // Optimistic Update
-        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      } else {
-        const res = await fetch('http://localhost:8000/tx-submit', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-              tx: {
-                 from_address: wallet.address,
-                 to_address: recipient,
-                 amount_atom: amountAtom.toString(),
-                 nonce: nextNonce
-              },
-              signature
-           })
-        });
-        const data = await res.json();
-        if(!data.ok) throw new Error(data.error);
-        addLog(`Transaction sent: ${data.inbox_id}`);
-        // Update Local
-        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      }
+      // All transactions now go through Aura Cloud (Supabase/GitHub)
+      await submitCloudTx('transfer', { 
+          from_address: wallet.address, 
+          to_address: recipient, 
+          amount_atom: amountAtom.toString(),
+          nonce: nextNonce 
+      }, signature);
+      
+      addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting validation.`);
+      setLastCloudOpTime(Date.now());
+      // Optimistic Update
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      
       setActiveModal(null);
       setRecipient("");
       setSendAmount("");
@@ -303,41 +289,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      // 🌟 Precision Fix: Use Atomic Units (Wei) to avoid float rounding errors
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
       
-      // 🌟 Replay Protection: Fetch Nonce
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
       const message = `AUR_STAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
-      if (isCloudMode) {
-        await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-        addLog(`Cloud Stake Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
-        setLastCloudOpTime(Date.now());
-        // Optimistic Update
-        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-        setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
-      } else {
-        const res = await fetch('http://localhost:8000/stake-op', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-              op: 'stake',
-              tx: { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce },
-              signature
-           })
-        });
-        const data = await res.json();
-        if(!data.ok) throw new Error(data.error);
-        
-        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-        setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
-        addLog(`Locked ${stakeAmount} AUR into L3 Sovereign Core.`);
-      }
+      await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+      addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
+      setLastCloudOpTime(Date.now());
+      // Optimistic Update
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
       
       setActiveModal(null);
       setStakeAmount("");
@@ -351,41 +317,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      // 🌟 Precision Fix: Atomic Units
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
       
-      // 🌟 Replay Protection: Fetch Nonce
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
       const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
-      if (isCloudMode) {
-        await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-        addLog(`Cloud Unstake Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
-        setLastCloudOpTime(Date.now());
-        // Optimistic Update
-        setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-        setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
-      } else {
-        const res = await fetch('http://localhost:8000/stake-op', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-              op: 'unstake',
-              tx: { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce },
-              signature
-           })
-        });
-        const data = await res.json();
-        if(!data.ok) throw new Error(data.error);
-        
-        setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-        setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
-        addLog(`Unlocked ${stakeAmount} AUR from L3 Sovereign Core.`);
-      }
+      await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+      addLog(`Cloud Unstake Sent. Awaiting cloud validation.`);
+      setLastCloudOpTime(Date.now());
+      // Optimistic Update
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
       
       setActiveModal(null);
       setStakeAmount("");
@@ -399,28 +345,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
       
       {/* Diagnostic Overlay */}
-      {!isEngineReady && !isCloudMode && (
+      {!isEngineReady && (
         <div className="modal-overlay">
-          <div className="modal-content text-center border-red-500/20 shadow-red-500/10 max-w-2xl">
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="text-red-500 w-10 h-10 animate-pulse" />
+          <div className="modal-content text-center border-indigo-500/20 shadow-indigo-500/10 max-w-2xl">
+            <div className="w-20 h-20 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <RefreshCw className="text-indigo-500 w-10 h-10 animate-spin" />
             </div>
-            <h2 className="text-2xl font-bold mb-4">Sovereign Link Restricted</h2>
-            
-            {IS_HTTPS ? (
-               <div className="text-white/70 mb-8 space-y-4">
-                  <p>
-                    You are currently on <strong>HTTPS</strong> (GitHub Pages). Browsers block communication with your local Engine (HTTP) for security.
-                  </p>
-                  <div className="bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20 text-indigo-300 font-bold">
-                    Recommendation: Use your <a href="http://localhost:5173" className="underline hover:text-white">Local Dashboard</a> for full control.
-                  </div>
-               </div>
-            ) : (
-               <p className="text-white/50 mb-8 leading-relaxed">
-                 The Sovereign Engine (fahsai_engine.py) is unreachable. This local node requires direct communication to broadcast your presence.
-               </p>
-            )}
+            <h2 className="text-2xl font-bold mb-4">Synchronizing Aura Cloud</h2>
+            <p className="text-white/50 mb-8 leading-relaxed">
+              Establishing secure connection to Supabase Off-chain Backend. This fixes the "Link Restricted" error by using cloud-hosted HTTPS.
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-white/90 transition-all text-sm"
+            >
+              <RefreshCw size={18} /> Retry Connection
+            </button>
+          </div>
+        </div>
+      )}
 
             <div className="space-y-4 text-left glass-panel p-6 rounded-2xl mb-8">
               <p className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Repair Protocol</p>
