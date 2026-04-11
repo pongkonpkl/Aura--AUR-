@@ -36,9 +36,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
   const [isCloudMode, setIsCloudMode] = useState(true); // Default to Cloud Mode now
-  const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(0);
-  const [dailyEmission, setDailyEmission] = useState<string>("0");
+  const [totalEmission, setTotalEmission] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
+  const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
+  const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -123,9 +124,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         if (pError && pError.code === 'PGRST116') {
           // Profile not found, create one (Auto-registration)
           await supabase.from('profiles').insert({
-            id: (await supabase.auth.getUser()).data.user?.id || undefined, // Use Auth ID if available
+            id: (await supabase.auth.getUser()).data.user?.id || undefined, 
             wallet_address: wallet.address,
-            nickname: 'Than B.R.D.'
+            nickname: 'Aura Sovereign'
           });
           addLog("Sovereign Identity Registered in Cloud.");
         } else if (profile) {
@@ -144,24 +145,48 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           setStakedBalanceAtom(stake.amount?.toString() || "0");
         }
 
-        // 3. Network Stats & Daily Emission
+        // 3. Network Stats & Emission Control
         const startOfToday = new Date();
         startOfToday.setHours(0,0,0,0);
 
+        // Today's Pulse
         const { data: dailyData } = await supabase
           .from('distributions')
           .select('amount')
           .gte('created_at', startOfToday.toISOString());
         
-        const totalMined = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
-        setDailyEmission(totalMined.toString());
+        const sumToday = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
+        setDailyEmission(sumToday.toString());
+
+        // Global Total Supply (Lifetime Mined)
+        const { data: globalData } = await supabase
+          .from('distributions')
+          .select('amount');
+        
+        const sumTotal = globalData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
+        setTotalEmission(sumTotal.toString());
 
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
         setActiveNodesCount(count || 0);
         setNetworkStats({ 
-          activeNodes: count || 12, 
-          sharedPool: (Number(totalMined) / 1e18).toFixed(4)
+          activeNodes: count || 0, 
+          sharedPool: (Number(sumToday) / 1e18).toFixed(4)
         });
+
+        // 4. Legacy Balance Detection
+        try {
+          const res = await fetch(`${REPO_RAW_BASE}/ledger.json`);
+          if (res.ok) {
+            const ledger = await res.json();
+            const legacyBalance = BigInt(ledger.balances[wallet.address] || "0");
+            const cloudBalance = BigInt(profile?.total_accumulated || "0");
+            
+            if (legacyBalance > cloudBalance) {
+              addLog(`⚠️ Discovery: Legacy balance of ${ethers.formatUnits(legacyBalance, 18)} AUR found in old ledger.`);
+              setLegacyPendingBalance(legacyBalance.toString());
+            }
+          }
+        } catch (e) { /* silent fail for ledger fetch */ }
 
       } catch (err) {
         console.error("Supabase sync error:", err);
@@ -205,18 +230,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
 
   const fetchNonce = async (address: string): Promise<number> => {
     try {
+      // Security Hardening: Prioritize Database-driven Nonce
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('last_nonce')
+        .eq('wallet_address', address)
+        .single();
+      
+      if (profile && profile.last_nonce !== null) {
+        return Number(profile.last_nonce);
+      }
+
+      // Fallback: This is legacy logic for transition
       const resp = await fetch(`${LOCAL_ENGINE_URL}/nonce?address=${address}`);
       const data = await resp.json();
       return data.nonce;
     } catch (e) {
-      // Fallback: This is tricky because we need the most recent nonce.
-      // If local engine is down, we could try to read from GitHub raw.
+      // Deep Fallback: Cloud Ledger JSON
       try {
         const res = await fetch(`${REPO_RAW_BASE}/ledger.json`);
         const ledger = await res.json();
         return parseInt((ledger.nonces || {})[address] || "0");
       } catch (err) {
-        addLog("Nonce retrieval failed. Transaction may be rejected.");
+        addLog("Critical: Nonce retrieval failed. Check connection.");
         return 0;
       }
     }
@@ -225,6 +261,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   // Removed handleForceDistribute (Now managed autonomously by Cloud Cron)
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
+    // Audit Fix: Operation Validation
+    const VALID_OPS = ['send', 'stake', 'unstake'];
+    if (!VALID_OPS.includes(op)) throw new Error("Security Violation: Invalid Cloud Operation.");
+
     const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
     const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
     
@@ -242,6 +282,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     });
     if (!res.ok) {
       const txt = await res.text();
+      if (res.status === 401) throw new Error("GitHub Token (PAT) is invalid or expired.");
       throw new Error(`Cloud Validator Error: ${txt}`);
     }
   };
@@ -699,19 +740,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           </div>
           
           <div className="flex flex-wrap gap-2 mt-6 md:mt-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+              <Globe size={12} className="text-indigo-400" />
+              <span className="text-[10px] font-black text-white/60 uppercase tracking-tighter">
+                Total Supply: {(Number(totalEmission) / 1e18).toFixed(4)} AUR
+              </span>
+            </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-pulse">
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
-                Pulse: {(Number(dailyEmission) / 1e18).toFixed(4)} AUR Mined Today
+                Pulse: {(Number(dailyEmission) / 1e18).toFixed(4)} AUR Today
               </span>
             </div>
             
-            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-xl">
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-xl gap-1">
               <button 
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-indigo-500/20 text-indigo-300 rounded-lg font-bold text-[10px] flex items-center gap-2 border border-indigo-500/20"
               >
                 <Home size={14}/> <span className="hidden lg:inline">Home</span>
+              </button>
+              <button 
+                onClick={() => setActiveModal('seed')}
+                className="px-4 py-2 hover:bg-white/5 text-white/40 hover:text-white rounded-lg font-bold text-[10px] transition-all flex items-center gap-2"
+              >
+                <Shield size={14}/> <span className="hidden lg:inline">Security</span>
               </button>
               <button 
                 onClick={() => setActiveModal('cloud')}
@@ -776,6 +829,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     <p className="text-sm text-purple-400/60 font-medium">Liquid Balance (Available to Spend)</p>
                   </div>
                 </div>
+                {legacyPendingBalance && BigInt(legacyPendingBalance) > BigInt(balanceAtom) && (
+                  <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-left duration-700">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-500/20 rounded-lg text-amber-500"><AlertCircle size={16}/></div>
+                      <div>
+                        <p className="text-[10px] font-black text-amber-500 uppercase">Legacy Wealth Detected</p>
+                        <p className="text-xs text-white/60">
+                          {ethers.formatUnits(legacyPendingBalance, 18)} AUR in old ledger.
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        setIsSyncingLegacy(true);
+                        try {
+                          addLog("Initiating Legacy Migration Signature...");
+                          const sig = await wallet.signMessage(`SYNC_LEGACY:${legacyPendingBalance}`);
+                          await submitCloudTx('sync_legacy', { amount: legacyPendingBalance }, sig);
+                          addLog("Legacy Sync request dispatched to Cloud Validator.");
+                          setLegacyPendingBalance(null);
+                        } catch (e: any) {
+                          addLog(`Sync error: ${e.message}`);
+                        } finally {
+                          setIsSyncingLegacy(false);
+                        }
+                      }}
+                      disabled={isSyncingLegacy}
+                      className="px-4 py-2 bg-amber-500 text-black font-black text-[10px] rounded-lg hover:bg-amber-400 transition-all flex items-center gap-2"
+                    >
+                      {isSyncingLegacy ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                      RESTORE NOW
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <button 
                     onClick={() => setActiveModal('send')} 
@@ -815,15 +903,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <div className="flex gap-3">
                   <button 
                     onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
                   >
                     Lock & Earn Output
-                  </button>
-                  <button 
-                    onClick={() => { setStakingTab('unstake'); setActiveModal('stake'); }} 
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold flex justify-center items-center gap-2 border border-white/5 transition-all text-sm"
-                  >
-                    Unstake
                   </button>
                 </div>
               </div>
