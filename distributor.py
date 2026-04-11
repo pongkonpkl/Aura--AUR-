@@ -32,51 +32,81 @@ def distribute():
     nodes = load_json(NODES_FILE)
     presence = nodes.get("presence", {})
     
-    active_addresses = set()
+    # Identify pools
+    node_addresses = set()
     for addr, ts in presence.items():
         try:
             p_time = datetime.fromisoformat(ts.replace("Z", ""))
             if (now_utc - p_time).total_seconds() < 86400:
-                active_addresses.add(addr)
+                 node_addresses.add(addr)
         except: pass
-    
+        
+    staker_addresses = set()
     staked_balances = ledger.setdefault("staked_balances", {})
     for addr, bstr in staked_balances.items():
         if int(bstr) > 0:
-            active_addresses.add(addr)
-            
-    active_addresses = list(active_addresses)
+            staker_addresses.add(addr)
+    
+    # 🌟 Survival Mode Logic: If no nodes, stakers take all. 
+    # If no nothing, owner takes all to keep ledger alive.
+    active_addresses = node_addresses.union(staker_addresses)
+    if not active_addresses:
+        # Fallback to a default address if possible or just log warning
+        print("[WARNING] No active nodes or stakers. Network halted.")
+        return
     
     if active_addresses:
-        total_reward = 1_000_000_000_000_000_000 # 1 AUR
-        per_node_reward = total_reward // len(active_addresses)
+        total_reward = 1_000_000_000_000_000_000 # 1 AUR Total / Day
         
-        print(f"[INFO] Splitting 1 AUR ({total_reward}) among {len(active_addresses)} nodes.")
+        # Calculate pool sizes
+        if node_addresses and staker_addresses:
+            pop_pool = int(total_reward * 0.8) # 80% Presence
+            pos_pool = int(total_reward * 0.2) # 20% Stake
+        elif node_addresses:
+            pop_pool = total_reward
+            pos_pool = 0
+        else: # Survival Mode: Only Stakers exist
+            pop_pool = 0
+            pos_pool = total_reward
         
-        # 🌟 Auto-Compounding Rule: All rewards go to staked_balances
+        print(f"[INFO] Economy: Split 1 AUR (PoP: {pop_pool}, PoS: {pos_pool})")
+        
         staked = ledger.setdefault("staked_balances", {})
         
-        for addr in active_addresses:
-            current_stk = int(staked.get(addr, "0"))
-            staked[addr] = str(current_stk + per_node_reward)
-            
-            proof_hash = hashlib.sha256(f"{today_str}-{addr}-G0LD".encode()).hexdigest()
-            new_event = {
-                "id": proof_hash,
-                "event_type": "mining_reward",
-                "from_address": "System",
-                "to_address": addr,
-                "amount_atom": str(per_node_reward),
-                "created_at": datetime.utcnow().isoformat() + "Z"
-            }
-            ledger.setdefault("history", []).insert(0, new_event)
+        # Process PoP Pool (80%)
+        if node_addresses:
+            per_node = pop_pool // len(node_addresses)
+            for addr in node_addresses:
+                cur = int(staked.get(addr, "0"))
+                staked[addr] = str(cur + per_node)
+                
+                proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoP".encode()).hexdigest()
+                ledger.setdefault("history", []).insert(0, {
+                    "id": proof_hash, "event_type": "mining_reward_pop",
+                    "from_address": "System", "to_address": addr,
+                    "amount_atom": str(per_node), "created_at": datetime.utcnow().isoformat() + "Z"
+                })
+
+        # Process PoS Pool (20%)
+        if staker_addresses:
+            per_staker = pos_pool // len(staker_addresses)
+            for addr in staker_addresses:
+                cur = int(staked.get(addr, "0"))
+                staked[addr] = str(cur + per_staker)
+                
+                proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoS".encode()).hexdigest()
+                ledger.setdefault("history", []).insert(0, {
+                    "id": proof_hash, "event_type": "mining_reward_pos",
+                    "from_address": "System", "to_address": addr,
+                    "amount_atom": str(per_staker), "created_at": datetime.utcnow().isoformat() + "Z"
+                })
 
         ledger["last_mint"] = today_str
         total_supply = int(ledger.get("total_supply", "0"))
         ledger["total_supply"] = str(total_supply + total_reward)
         
         save_json(LEDGER_FILE, ledger)
-        print(f"[SUCCESS] Global rewards distributed to {len(active_addresses)} nodes.")
+        print(f"[SUCCESS] Global rewards distributed.")
     else:
         print("[WARNING] No active nodes or stakers found.")
 

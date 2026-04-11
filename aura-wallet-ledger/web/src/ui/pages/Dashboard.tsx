@@ -186,6 +186,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     };
   }, [wallet, lastCloudOpTime]);
 
+  const fetchNonce = async (address: string): Promise<number> => {
+    try {
+      const resp = await fetch(`${LOCAL_ENGINE_URL}/nonce?address=${address}`);
+      const data = await resp.json();
+      return data.nonce;
+    } catch (e) {
+      // Fallback: This is tricky because we need the most recent nonce.
+      // If local engine is down, we could try to read from GitHub raw.
+      try {
+        const res = await fetch(`${REPO_RAW_BASE}/ledger.json`);
+        const ledger = await res.json();
+        return parseInt((ledger.nonces || {})[address] || "0");
+      } catch (err) {
+        addLog("Nonce retrieval failed. Transaction may be rejected.");
+        return 0;
+      }
+    }
+  };
+
   const handleForceDistribute = async () => {
     setIsDistributing(true);
     try {
@@ -232,12 +251,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     setIsSending(true);
     try {
       const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
-      const message = `AUR_TX:${wallet.address}:${recipient}:${amountAtom}`;
+      
+      // 🌟 Replay Protection: Fetch Current Nonce
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
+      
+      const message = `AUR_TX:${nextNonce}:${wallet.address}:${recipient}:${amountAtom}`;
       const signature = await wallet.signMessage(message);
       
       if (isCloudMode) {
-        await submitCloudTx('transfer', { from_address: wallet.address, to_address: recipient, amount_atom: amountAtom.toString() }, signature);
-        addLog(`Cloud Send Sent. Awaiting GitHub validation.`);
+        await submitCloudTx('transfer', { 
+           from_address: wallet.address, 
+           to_address: recipient, 
+           amount_atom: amountAtom.toString(),
+           nonce: nextNonce 
+        }, signature);
+        addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
         setLastCloudOpTime(Date.now());
         // Optimistic Update
         setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
@@ -249,7 +278,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               tx: {
                  from_address: wallet.address,
                  to_address: recipient,
-                 amount_atom: amountAtom.toString()
+                 amount_atom: amountAtom.toString(),
+                 nonce: nextNonce
               },
               signature
            })
@@ -277,12 +307,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
       
-      const message = `AUR_STAKE:${wallet.address}:${amountAtom.toString()}`;
+      // 🌟 Replay Protection: Fetch Nonce
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
+
+      const message = `AUR_STAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       if (isCloudMode) {
-        await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
-        addLog(`Cloud Stake Sent. Awaiting GitHub validation.`);
+        await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+        addLog(`Cloud Stake Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
         setLastCloudOpTime(Date.now());
         // Optimistic Update
         setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
@@ -293,7 +327,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({
               op: 'stake',
-              tx: { address: wallet.address, amount_atom: amountAtom.toString() },
+              tx: { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce },
               signature
            })
         });
@@ -321,12 +355,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
       
-      const message = `AUR_UNSTAKE:${wallet.address}:${amountAtom.toString()}`;
+      // 🌟 Replay Protection: Fetch Nonce
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
+
+      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       if (isCloudMode) {
-        await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString() }, signature);
-        addLog(`Cloud Unstake Sent. Awaiting GitHub validation.`);
+        await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+        addLog(`Cloud Unstake Sent (Nonce: ${nextNonce}). Awaiting GitHub validation.`);
         setLastCloudOpTime(Date.now());
         // Optimistic Update
         setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
@@ -337,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({
               op: 'unstake',
-              tx: { address: wallet.address, amount_atom: amountAtom.toString() },
+              tx: { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce },
               signature
            })
         });
@@ -860,7 +898,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-2xl text-emerald-400/40"> AUR</span>
                   </p>
                   <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
-                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Earning 80% Daily Yield)
+                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Validator Reward: 20% Yield)
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -894,7 +932,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xl font-bold">Autonomous Airdrop</p>
-                  <p className="text-sm text-indigo-300 font-medium">Auto-broadcasting (20% Base Yield)</p>
+                  <p className="text-sm text-indigo-300 font-medium">Autonomous Presence (80% Base Yield)</p>
                 </div>
               </div>
 

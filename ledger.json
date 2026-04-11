@@ -2,7 +2,8 @@
   "symbol": "AUR",
   "decimals": 18,
   "last_mint": "2026-04-11",
-  "total_supply": "7000000000000000000",
+  "total_supply": "7970000000000000000",
+  "nonces": {},
   "balances": {
     "nGWz29ysWq86Xg39ZVWg2F6Yth9uvfyDgtkrWvty1AWk7wDeAf": "1000000000000000000",
     "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "2309523809523809523",
@@ -14,15 +15,213 @@
     "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8": "142857142857142857"
   },
   "staked_balances": {
-    "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253": "1142857142857142857",
-    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "142857142857142857",
-    "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9": "142857142857142857",
-    "0xB3421bEC36bfbFE286d3CF00F200404E74e30896": "142857142857142857",
-    "0x6Ef6af283127d881Cef76587A83378E86701C87f": "142857142857142857",
-    "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090": "142857142857142857",
-    "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8": "142857142857142857"
+    "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253": "1428571428571428570",
+    "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ": "428571428571428570",
+    "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9": "428571428571428570",
+    "0xB3421bEC36bfbFE286d3CF00F200404E74e30896": "428571428571428570",
+    "0x6Ef6af283127d881Cef76587A83378E86701C87f": "428571428571428570",
+    "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090": "428571428571428570",
+    "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8": "428571428571428570"
   },
   "history": [
+    {
+      "id": "tx-1775855383.323835",
+      "event_type": "transfer",
+      "from_address": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "1000000000000000000",
+      "burn_penalty": "10000000000000000",
+      "created_at": "2026-04-11T04:09:43.323885Z",
+      "cloud_validated": true
+    },
+    {
+      "id": "tx-1775855332.458976",
+      "event_type": "transfer",
+      "from_address": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "1000000000000000000",
+      "burn_penalty": "10000000000000000",
+      "created_at": "2026-04-11T04:08:52.459018Z",
+      "cloud_validated": true
+    },
+    {
+      "id": "tx-1775855324.411089",
+      "event_type": "transfer",
+      "from_address": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "1000000000000000000",
+      "burn_penalty": "10000000000000000",
+      "created_at": "2026-04-11T04:08:44.411469Z",
+      "cloud_validated": true
+    },
+    {
+      "id": "f95d83834c08e89ab61963f6d8e48195295352f6e913203c479c1e7d6504128d",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222191Z"
+    },
+    {
+      "id": "58977512d8c603152f29ec074a8d88aca43e888d674e0506626b77c24100cf61",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222188Z"
+    },
+    {
+      "id": "5469786169108598e003f2ff77c657cc9fae836b228ddc48a9d301aeeb76c8a5",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222184Z"
+    },
+    {
+      "id": "16ece31d6cc7559f44503dfaed556936b3d37767e2de96499fdedbb94772c97c",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0xB3421bEC36bfbFE286d3CF00F200404E74e30896",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222181Z"
+    },
+    {
+      "id": "ffcd8f5158c8b834c47ae4abf7373133a448c97917a0e67e3395be01ebb8f5c1",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222178Z"
+    },
+    {
+      "id": "47dca616b9793c8de337ba509a4fe732d7c5489d82de7ccd08813e3e37ee1417",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x6Ef6af283127d881Cef76587A83378E86701C87f",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222172Z"
+    },
+    {
+      "id": "906ae1a22c56c687fd8c2d11a116e72f1804235e93528f02fd3c8c39d6a3158c",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "amount_atom": "142857142857142857",
+      "created_at": "2026-04-11T03:55:45.222154Z"
+    },
+    {
+      "id": "906ae1a22c56c687fd8c2d11a116e72f1804235e93528f02fd3c8c39d6a3158c",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853719Z"
+    },
+    {
+      "id": "58977512d8c603152f29ec074a8d88aca43e888d674e0506626b77c24100cf61",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853716Z"
+    },
+    {
+      "id": "5469786169108598e003f2ff77c657cc9fae836b228ddc48a9d301aeeb76c8a5",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853713Z"
+    },
+    {
+      "id": "f95d83834c08e89ab61963f6d8e48195295352f6e913203c479c1e7d6504128d",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853710Z"
+    },
+    {
+      "id": "ffcd8f5158c8b834c47ae4abf7373133a448c97917a0e67e3395be01ebb8f5c1",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853707Z"
+    },
+    {
+      "id": "47dca616b9793c8de337ba509a4fe732d7c5489d82de7ccd08813e3e37ee1417",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0x6Ef6af283127d881Cef76587A83378E86701C87f",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853703Z"
+    },
+    {
+      "id": "16ece31d6cc7559f44503dfaed556936b3d37767e2de96499fdedbb94772c97c",
+      "event_type": "mining_reward_pos",
+      "from_address": "System",
+      "to_address": "0xB3421bEC36bfbFE286d3CF00F200404E74e30896",
+      "amount_atom": "28571428571428571",
+      "created_at": "2026-04-11T03:54:41.853697Z"
+    },
+    {
+      "id": "126c7758919f2bd3e49ec7c96a528a76abb27da4a0eb9bb4fdebea812ae0dd73",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "oLP8ge13FS8oH6qUUWiPzastzGB61G5tr4gc9ksmDgbr4BUsVQ",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853680Z"
+    },
+    {
+      "id": "5111e025b400af1d692fb649f02e8800c195b081596f1283c0e6975a8399dc78",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0x0aa81E8DAf1Ef9e9A2A62B043bFE9323b71BF253",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853676Z"
+    },
+    {
+      "id": "13ab75bea201749fbc2cef00b9ec6b718d1b31e9ae8c07f439a87308b494d176",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0x0FA66745F5f03CB4d7b3acDc8f4f8b84E0861090",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853673Z"
+    },
+    {
+      "id": "c81746b0a39cee151420c64ce9746542555e42b2d3652d74659f991c75030d90",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0x3C589957Ab5826905e1E41C4b7840DD5075F36C9",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853670Z"
+    },
+    {
+      "id": "6db2d456386855b2cc517668c57d3f5851cc097b8d5a54c7f8221e6200d3a0b2",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853666Z"
+    },
+    {
+      "id": "4f73b90d0618f2dd9101ecef2ea3692198ce37267e7da11a663f18bc8d420eb2",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0x6Ef6af283127d881Cef76587A83378E86701C87f",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853661Z"
+    },
+    {
+      "id": "08c8d57331a981add5ba8b3799139d0a7baaa59d8ce01d6a6bc477fecb8d916e",
+      "event_type": "mining_reward_pop",
+      "from_address": "System",
+      "to_address": "0xB3421bEC36bfbFE286d3CF00F200404E74e30896",
+      "amount_atom": "114285714285714285",
+      "created_at": "2026-04-11T03:54:41.853645Z"
+    },
     {
       "id": "78db86fd1c0b6896315f9eaad95cdcb448f1c9b26e23f4668ba966d2d6a1ba56",
       "event_type": "mining_reward",

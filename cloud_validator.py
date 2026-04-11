@@ -35,13 +35,22 @@ def process_transaction(payload_str):
         
     try:
         from_address = tx.get("from_address") or tx.get("address")
-        amount_atom = int(tx.get("amount_atom", 0))
+        if not from_address:
+            print("[ERROR] Missing address in tx")
+            return
+            
+        # 🌟 Replay Protection: Nonce check
+        ledger = load_json(LEDGER_FILE)
+        nonces = ledger.setdefault("nonces", {})
+        expected_nonce = int(nonces.get(from_address, "0")) + 1
+        signed_nonce = int(tx.get("nonce", 0))
         
+        amount_atom = int(tx.get("amount_atom", 0))
         if op == "transfer":
             to_address = tx.get("to_address")
-            message_str = f"AUR_TX:{from_address}:{to_address}:{amount_atom}"
+            message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
         else:
-            message_str = f"AUR_{op.upper()}:{from_address}:{amount_atom}"
+            message_str = f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}"
             
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
@@ -49,6 +58,11 @@ def process_transaction(payload_str):
         if recovered_address.lower() != from_address.lower():
             print("[ERROR] Invalid digital signature")
             return
+            
+        if signed_nonce != expected_nonce:
+            print(f"[ERROR] Invalid nonce. Expected {expected_nonce}, got {signed_nonce}")
+            return
+            
     except Exception as e:
         print(f"[ERROR] Signature verification failed: {e}")
         return
@@ -57,7 +71,9 @@ def process_transaction(payload_str):
         print("[ERROR] Invalid amount")
         return
         
-    ledger = load_json(LEDGER_FILE)
+    # Update nonce in ledger
+    nonces[from_address] = str(expected_nonce)
+        
     balances = ledger.setdefault("balances", {})
     staked = ledger.setdefault("staked_balances", {})
     

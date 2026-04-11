@@ -84,19 +84,29 @@ async def tx_submit(request: Request):
     to_address = tx.get("to_address")
     amount_atom = int(tx.get("amount_atom", 0))
     
-    if not signature:
-        return {"ok": False, "error": "Missing digital signature"}
-        
+    # 🌟 Replay Protection: Nonce check
+    ledger = load_json(LEDGER_FILE)
+    nonces = ledger.setdefault("nonces", {})
+    expected_nonce = int(nonces.get(from_address, "0")) + 1
+    signed_nonce = int(tx.get("nonce", 0))
+
     try:
-        # Reconstruct the exact message the client signed
-        message_str = f"AUR_TX:{from_address}:{to_address}:{amount_atom}"
+        # Reconstruct message WITH nonce
+        message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
         
         if recovered_address.lower() != from_address.lower():
             return {"ok": False, "error": "Invalid digital signature"}
+        
+        if signed_nonce != expected_nonce:
+            return {"ok": False, "error": f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"}
+            
     except Exception as e:
         return {"ok": False, "error": f"Signature verification failed: {e}"}
+    
+    # Update nonce in ledger
+    nonces[from_address] = str(expected_nonce)
     
     if amount_atom <= 0:
         return {"ok": False, "error": "Invalid amount"}
@@ -149,18 +159,28 @@ async def stake_op(request: Request):
     address = tx.get("address")
     amount_atom = int(tx.get("amount_atom", 0))
     
-    if not signature:
-        return {"ok": False, "error": "Missing digital signature"}
-        
+    # 🌟 Replay Protection: Nonce check
+    ledger = load_json(LEDGER_FILE)
+    nonces = ledger.setdefault("nonces", {})
+    expected_nonce = int(nonces.get(address, "0")) + 1
+    signed_nonce = int(tx.get("nonce", 0))
+
     try:
-        message_str = f"AUR_{op.upper()}:{address}:{amount_atom}"
+        message_str = f"AUR_{op.upper()}:{signed_nonce}:{address}:{amount_atom}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
         
         if recovered_address.lower() != address.lower():
             return {"ok": False, "error": "Invalid digital signature"}
+            
+        if signed_nonce != expected_nonce:
+            return {"ok": False, "error": f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"}
+            
     except Exception as e:
         return {"ok": False, "error": f"Signature verification failed: {e}"}
+        
+    # Update nonce in ledger
+    nonces[address] = str(expected_nonce)
     
     if amount_atom <= 0:
         return {"ok": False, "error": "Invalid amount"}
@@ -239,6 +259,13 @@ async def force_distribution():
     else:
         return {"ok": False, "message": "Distribution already completed or failed check logs."}
 
+@app.get("/nonce")
+async def get_nonce(address: str):
+    ledger = load_json(LEDGER_FILE)
+    nonces = ledger.get("nonces", {})
+    current_nonce = int(nonces.get(address, "0"))
+    return {"nonce": current_nonce}
+
 @app.get("/network-stats")
 def get_network_stats():
     nodes = get_nodes()
@@ -277,53 +304,76 @@ async def distribute_rewards(force=False):
         nodes = get_nodes()
         presence = nodes.get("presence", {})
         
-        # Identify active addresses in last 24h (all UTC) + Stakers
-        active_addresses = set()
+        # Identify pools
+        node_addresses = set()
         for addr, ts in presence.items():
             try:
                 p_time = datetime.fromisoformat(ts.replace("Z", ""))
                 if (now_utc - p_time).total_seconds() < 86400:
-                     active_addresses.add(addr)
+                     node_addresses.add(addr)
             except: pass
-        
-        # 🌟 Robustness: Ensure staked_balances key exists
+            
+        staker_addresses = set()
         staked_balances = ledger.setdefault("staked_balances", {})
         for addr, bstr in staked_balances.items():
             if int(bstr) > 0:
-                active_addresses.add(addr)
+                staker_addresses.add(addr)
         
-        # If no heartbeats found (unlikely), fallback to local identity
+        # 🌟 Survival Mode Logic: If no nodes, stakers take all. 
+        # If no nothing, owner takes all to keep ledger alive.
+        active_addresses = node_addresses.union(staker_addresses)
         if not active_addresses:
             identity = load_json(IDENTITY_FILE)
             if identity.get("address"):
                 active_addresses.add(identity["address"])
-        
-        # convert set to list for stable processing
-        active_addresses = list(active_addresses)
+                node_addresses.add(identity["address"]) # Backup as node
         
         if active_addresses:
-            total_reward = 1_000_000_000_000_000_000 # 1 AUR
-            per_node_reward = total_reward // len(active_addresses)
+            total_reward = 1_000_000_000_000_000_000 # 1 AUR Total / Day
             
-            print(f"[INFO] Splitting 1 AUR ({total_reward}) among {len(active_addresses)} nodes.")
+            # Calculate pool sizes
+            if node_addresses and staker_addresses:
+                pop_pool = int(total_reward * 0.8) # 80% Presence
+                pos_pool = int(total_reward * 0.2) # 20% Stake
+            elif node_addresses:
+                pop_pool = total_reward
+                pos_pool = 0
+            else: # Survival Mode: Only Stakers exist
+                pop_pool = 0
+                pos_pool = total_reward
             
-            # 🌟 Auto-Compounding Rule: All rewards go to staked_balances
+            print(f"[INFO] Economy: Split 1 AUR (PoP: {pop_pool}, PoS: {pos_pool})")
+            
             staked = ledger.setdefault("staked_balances", {})
             
-            for addr in active_addresses:
-                current_stk = int(staked.get(addr, "0"))
-                staked[addr] = str(current_stk + per_node_reward)
-                
-                proof_hash = hashlib.sha256(f"{today_str}-{addr}-G0LD".encode()).hexdigest()
-                new_event = {
-                    "id": proof_hash,
-                    "event_type": "mining_reward",
-                    "from_address": "System",
-                    "to_address": addr,
-                    "amount_atom": str(per_node_reward),
-                    "created_at": datetime.utcnow().isoformat() + "Z"
-                }
-                ledger.setdefault("history", []).insert(0, new_event)
+            # Process PoP Pool (80%)
+            if node_addresses:
+                per_node = pop_pool // len(node_addresses)
+                for addr in node_addresses:
+                    cur = int(staked.get(addr, "0"))
+                    staked[addr] = str(cur + per_node)
+                    self_reward = per_node
+                    
+                    proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoP".encode()).hexdigest()
+                    ledger.setdefault("history", []).insert(0, {
+                        "id": proof_hash, "event_type": "mining_reward_pop",
+                        "from_address": "System", "to_address": addr,
+                        "amount_atom": str(per_node), "created_at": datetime.utcnow().isoformat() + "Z"
+                    })
+
+            # Process PoS Pool (20%)
+            if staker_addresses:
+                per_staker = pos_pool // len(staker_addresses)
+                for addr in staker_addresses:
+                    cur = int(staked.get(addr, "0"))
+                    staked[addr] = str(cur + per_staker)
+                    
+                    proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoS".encode()).hexdigest()
+                    ledger.setdefault("history", []).insert(0, {
+                        "id": proof_hash, "event_type": "mining_reward_pos",
+                        "from_address": "System", "to_address": addr,
+                        "amount_atom": str(per_staker), "created_at": datetime.utcnow().isoformat() + "Z"
+                    })
 
             ledger["last_mint"] = today_str
             # Total supply check (add 1 AUR total)
