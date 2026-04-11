@@ -37,6 +37,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
   const [isCloudMode, setIsCloudMode] = useState(true); // Default to Cloud Mode now
   const [totalEmission, setTotalEmission] = useState<string>("0");
+  const [dailyEmission, setDailyEmission] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
   const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
   const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
