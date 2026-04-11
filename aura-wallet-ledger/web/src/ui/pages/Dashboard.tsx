@@ -35,6 +35,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
   const [isCloudMode, setIsCloudMode] = useState(!!(localStorage.getItem('aura_cloud_token')));
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(0);
+  const [isDistributing, setIsDistributing] = useState(false);
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -124,9 +125,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     };
 
     const fetchBalance = async () => {
-      // Prevent UI bounce-back: If a cloud operation was sent in the last 90 seconds, 
+      // Prevent UI bounce-back: If a cloud operation was sent in the last 120 seconds, 
       // do not overwrite the optimistic UI state with (potentially) stale server data.
-      const isCoolingDown = Date.now() - lastCloudOpTime < 90000;
+      const isCoolingDown = Date.now() - lastCloudOpTime < 120000;
 
       try {
         // Primary: Local Engine
@@ -184,6 +185,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       clearInterval(heartbeatInterval);
     };
   }, [wallet, lastCloudOpTime]);
+
+  const handleForceDistribute = async () => {
+    setIsDistributing(true);
+    try {
+      const res = await fetch(`${LOCAL_ENGINE_URL}/force-distribution`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        addLog("Sovereign Reward Distribution Triggered Successfully.");
+        alert("Rewards distributed to all active nodes and stakers!");
+      } else {
+        addLog(`Distribution Check: ${data.message}`);
+        alert(data.message);
+      }
+    } catch (e) {
+      addLog("Distribution trigger failed. Ensure local engine is active.");
+      alert("Local Engine Unreachable.");
+    }
+    setIsDistributing(false);
+  };
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
     const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
@@ -739,6 +759,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               <Globe size={16}/> <span className="hidden md:inline">Cloud Node</span>
             </button>
             <button 
+              onClick={() => { setLastCloudOpTime(0); addLog("Sovereign synchronization forced."); }}
+              className="px-5 py-2.5 hover:bg-indigo-500/10 text-indigo-400 rounded-xl font-bold text-sm transition-all flex items-center gap-2 border border-transparent hover:border-indigo-500/20"
+              title="Force sync from network"
+            >
+              <RefreshCw size={16} className={Date.now() - lastCloudOpTime < 120000 ? "animate-spin text-orange-400" : ""}/> 
+              <span className="hidden md:inline">{Date.now() - lastCloudOpTime < 120000 ? "Pending Validation" : "Sync Now"}</span>
+            </button>
+            <button 
               onClick={onLogout}
               className="px-5 py-2.5 hover:bg-red-500/10 text-white/50 hover:text-red-400 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
             >
@@ -901,6 +929,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   </div>
                   <span className="text-[10px] font-mono text-indigo-400 uppercase">Synced</span>
                 </div>
+                
+                <button 
+                  disabled={isDistributing}
+                  onClick={handleForceDistribute}
+                  className="w-full py-3 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  {isDistributing ? <RefreshCw size={12} className="animate-spin"/> : <Activity size={12}/>}
+                  Trigger PoS Distribution
+                </button>
               </div>
             </div>
 

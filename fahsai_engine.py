@@ -230,6 +230,15 @@ async def heartbeat(request: Request):
             
     return {"ok": True, "active_count": max(1, active_count)}
 
+@app.post("/force-distribution")
+async def force_distribution():
+    print("[ADMIN] Manual Distribution Triggered")
+    success = await distribute_rewards(force=True)
+    if success:
+        return {"ok": True, "message": "Manual distribution successful."}
+    else:
+        return {"ok": False, "message": "Distribution already completed or failed check logs."}
+
 @app.get("/network-stats")
 def get_network_stats():
     nodes = get_nodes()
@@ -255,75 +264,80 @@ def get_network_stats():
 async def startup_event():
     asyncio.create_task(midnight_mint_task())
 
+async def distribute_rewards(force=False):
+    now_utc = datetime.utcnow()
+    today_str = now_utc.strftime("%Y-%m-%d")
+    
+    ledger = load_json(LEDGER_FILE)
+    last_mint = ledger.get("last_mint")
+    
+    if last_mint != today_str or force:
+        print(f"[INFO] {today_str}: Global Distribution Sequence Initiated (Force={force})...")
+        
+        nodes = get_nodes()
+        presence = nodes.get("presence", {})
+        
+        # Identify active addresses in last 24h (all UTC) + Stakers
+        active_addresses = set()
+        for addr, ts in presence.items():
+            try:
+                p_time = datetime.fromisoformat(ts.replace("Z", ""))
+                if (now_utc - p_time).total_seconds() < 86400:
+                     active_addresses.add(addr)
+            except: pass
+        
+        # 🌟 Robustness: Ensure staked_balances key exists
+        staked_balances = ledger.setdefault("staked_balances", {})
+        for addr, bstr in staked_balances.items():
+            if int(bstr) > 0:
+                active_addresses.add(addr)
+        
+        # If no heartbeats found (unlikely), fallback to local identity
+        if not active_addresses:
+            identity = load_json(IDENTITY_FILE)
+            if identity.get("address"):
+                active_addresses.add(identity["address"])
+        
+        # convert set to list for stable processing
+        active_addresses = list(active_addresses)
+        
+        if active_addresses:
+            total_reward = 1_000_000_000_000_000_000 # 1 AUR
+            per_node_reward = total_reward // len(active_addresses)
+            
+            print(f"[INFO] Splitting 1 AUR ({total_reward}) among {len(active_addresses)} nodes.")
+            
+            balances = ledger.setdefault("balances", {})
+            
+            for addr in active_addresses:
+                current_bal = int(balances.get(addr, "0"))
+                balances[addr] = str(current_bal + per_node_reward)
+                
+                proof_hash = hashlib.sha256(f"{today_str}-{addr}-G0LD".encode()).hexdigest()
+                new_event = {
+                    "id": proof_hash,
+                    "event_type": "mining_reward",
+                    "from_address": "System",
+                    "to_address": addr,
+                    "amount_atom": str(per_node_reward),
+                    "created_at": datetime.utcnow().isoformat() + "Z"
+                }
+                ledger.setdefault("history", []).insert(0, new_event)
+
+            ledger["last_mint"] = today_str
+            # Total supply check (add 1 AUR total)
+            total_supply = int(ledger.get("total_supply", "0"))
+            ledger["total_supply"] = str(total_supply + total_reward)
+            
+            save_json(LEDGER_FILE, ledger)
+            auto_push_git()
+            print(f"[SUCCESS] Global rewards distributed to {len(active_addresses)} nodes.")
+            return True
+    return False
+        
 async def midnight_mint_task():
     while True:
-        now_utc = datetime.utcnow()
-        today_str = now_utc.strftime("%Y-%m-%d")
-        
-        ledger = load_json(LEDGER_FILE)
-        last_mint = ledger.get("last_mint")
-        
-        if last_mint != today_str:
-            print(f"[INFO] {today_str}: Global Distribution Sequence Initiated...")
-            
-            nodes = get_nodes()
-            presence = nodes.get("presence", {})
-            
-            # Identify active addresses in last 24h (all UTC) + Stakers
-            active_addresses = set()
-            for addr, ts in presence.items():
-                try:
-                    p_time = datetime.fromisoformat(ts.replace("Z", ""))
-                    if (now_utc - p_time).total_seconds() < 86400:
-                         active_addresses.add(addr)
-                except: pass
-            
-            staked_balances = ledger.get("staked_balances", {})
-            for addr, bstr in staked_balances.items():
-                if int(bstr) > 0:
-                    active_addresses.add(addr)
-            
-            # If no heartbeats found (unlikely), fallback to local identity
-            if not active_addresses:
-                identity = load_json(IDENTITY_FILE)
-                if identity.get("address"):
-                    active_addresses.add(identity["address"])
-            
-            # convert set to list for stable processing
-            active_addresses = list(active_addresses)
-            
-            if active_addresses:
-                total_reward = 1_000_000_000_000_000_000 # 1 AUR
-                per_node_reward = total_reward // len(active_addresses)
-                
-                print(f"[INFO] Splitting 1 AUR ({total_reward}) among {len(active_addresses)} nodes.")
-                
-                balances = ledger.setdefault("balances", {})
-                
-                for addr in active_addresses:
-                    current_bal = int(balances.get(addr, "0"))
-                    balances[addr] = str(current_bal + per_node_reward)
-                    
-                    proof_hash = hashlib.sha256(f"{today_str}-{addr}-G0LD".encode()).hexdigest()
-                    new_event = {
-                        "id": proof_hash,
-                        "event_type": "mining_reward",
-                        "from_address": "System",
-                        "to_address": addr,
-                        "amount_atom": str(per_node_reward),
-                        "created_at": datetime.utcnow().isoformat() + "Z"
-                    }
-                    ledger.setdefault("history", []).insert(0, new_event)
-
-                ledger["last_mint"] = today_str
-                # Total supply check (add 1 AUR total)
-                total_supply = int(ledger.get("total_supply", "0"))
-                ledger["total_supply"] = str(total_supply + total_reward)
-                
-                save_json(LEDGER_FILE, ledger)
-                auto_push_git()
-                print(f"[SUCCESS] Global rewards distributed to {len(active_addresses)} nodes.")
-                
+        await distribute_rewards()
         await asyncio.sleep(60)
 
 if __name__ == "__main__":

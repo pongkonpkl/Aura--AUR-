@@ -40,7 +40,7 @@ def distribute():
                 active_addresses.add(addr)
         except: pass
     
-    staked_balances = ledger.get("staked_balances", {})
+    staked_balances = ledger.setdefault("staked_balances", {})
     for addr, bstr in staked_balances.items():
         if int(bstr) > 0:
             active_addresses.add(addr)
