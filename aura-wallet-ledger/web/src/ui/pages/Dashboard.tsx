@@ -42,6 +42,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
   const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
 
+  const hasLoggedRegistration = useRef(false);
+  const hasLoggedDiscovery = useRef(false);
+
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
   const LOCAL_ENGINE_URL = "http://localhost:8000";
@@ -129,7 +132,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             wallet_address: wallet.address,
             nickname: 'Aura Sovereign'
           });
-          addLog("Sovereign Identity Registered in Cloud.");
+          if (!hasLoggedRegistration.current) {
+            addLog("Sovereign Identity Registered in Cloud.");
+            hasLoggedRegistration.current = true;
+          }
         } else if (profile) {
           setBalanceAtom(profile.total_accumulated?.toString() || "0");
           setIsEngineReady(true);
@@ -183,7 +189,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             const cloudBalance = BigInt(profile?.total_accumulated || "0");
             
             if (legacyBalance > cloudBalance) {
-              addLog(`⚠️ Discovery: Legacy balance of ${ethers.formatUnits(legacyBalance, 18)} AUR found in old ledger.`);
+              if (!hasLoggedDiscovery.current) {
+                addLog(`⚠️ Discovery: Legacy balance of ${ethers.formatUnits(legacyBalance, 18)} AUR found in old ledger.`);
+                hasLoggedDiscovery.current = true;
+              }
               setLegacyPendingBalance(legacyBalance.toString());
             }
           }
