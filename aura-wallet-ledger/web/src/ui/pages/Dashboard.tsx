@@ -273,10 +273,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
+      // 🌟 Precision Fix: Use Atomic Units (Wei) to avoid float rounding errors
+      const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
       
-      const message = `AUR_STAKE:${wallet.address}:${amountAtom}`;
+      const message = `AUR_STAKE:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       if (isCloudMode) {
@@ -316,10 +317,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      const amountAtom = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
+      // 🌟 Precision Fix: Atomic Units
+      const amountAtom = ethers.parseUnits(stakeAmount, 18);
       if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
       
-      const message = `AUR_UNSTAKE:${wallet.address}:${amountAtom}`;
+      const message = `AUR_UNSTAKE:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       if (isCloudMode) {
@@ -582,28 +584,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 flex justify-between">
                   <span>Amount to {stakingTab === 'stake' ? 'Lock' : 'Unlock'} (AUR)</span>
                   <span 
-                    className="text-indigo-400 cursor-pointer hover:text-indigo-300" 
+                    className="text-indigo-400 cursor-pointer hover:text-indigo-300 font-mono" 
                     onClick={() => {
-                        const maxVal = stakingTab === 'stake' ? (Number(balanceAtom)/1e18) : (Number(stakedBalanceAtom)/1e18);
-                        setStakeAmount(maxVal.toString());
+                        const rawAtom = stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom;
+                        setStakeAmount(ethers.formatUnits(rawAtom, 18));
                     }}
                   >
-                    Max: {stakingTab === 'stake' ? (Number(balanceAtom) / 1e18).toFixed(4) : (Number(stakedBalanceAtom) / 1e18).toFixed(4)}
+                    Max: {ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)}
                   </span>
                 </label>
                 <input 
                   value={stakeAmount} 
                   onChange={e=>setStakeAmount(e.target.value)} 
-                  type="number" 
+                  type="text" 
                   placeholder="0.00" 
-                  className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none transition-all font-bold ${stakingTab === 'stake' ? 'focus:border-emerald-500' : 'focus:border-orange-500'}`} 
+                  className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none transition-all font-mono font-bold ${stakingTab === 'stake' ? 'focus:border-emerald-500' : 'focus:border-orange-500'}`} 
                 />
               </div>
               <button 
-                disabled={isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > (stakingTab === 'stake' ? Number(balanceAtom) : Number(stakedBalanceAtom))} 
+                disabled={isStaking || !stakeAmount || (() => {
+                  try {
+                    const amt = ethers.parseUnits(stakeAmount, 18);
+                    return amt > BigInt(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom);
+                  } catch { return true; }
+                })()} 
                 onClick={stakingTab === 'stake' ? handleStake : handleUnstake} 
                 className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${
-                  isStaking || !stakeAmount || (parseFloat(stakeAmount) * 1e18) > (stakingTab === 'stake' ? Number(balanceAtom) : Number(stakedBalanceAtom)) 
+                  isStaking || !stakeAmount || (() => {
+                    try {
+                      const amt = ethers.parseUnits(stakeAmount, 18);
+                      return amt > BigInt(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom);
+                    } catch { return true; }
+                  })()
                   ? (stakingTab === 'stake' ? 'bg-emerald-600/50' : 'bg-orange-600/50') + ' text-white/50 cursor-not-allowed' 
                   : (stakingTab === 'stake' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400') + ' text-white'
                 }`}
@@ -810,9 +822,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <div className="flex justify-between items-end mb-8 space-y-1">
                   <div>
                     <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
-                      {(Number(balanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-white/40"> AUR</span>
+                      {ethers.formatUnits(balanceAtom, 18)}<span className="text-2xl text-white/40"> AUR</span>
                     </p>
-                    <p className="text-sm text-white/30 font-medium">Liquid Balance</p>
+                    <p className="text-sm text-purple-400/60 font-medium">Liquid Balance (Available to Spend)</p>
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -845,9 +857,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 </div>
                 <div className="space-y-1 mb-8">
                   <p className="text-5xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
-                    {(Number(stakedBalanceAtom) / 1e18).toFixed(4)}<span className="text-2xl text-emerald-400/40"> AUR</span>
+                    {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-2xl text-emerald-400/40"> AUR</span>
                   </p>
-                  <p className="text-sm text-emerald-400/60 font-medium">Locked (Earning 80% Daily Yield)</p>
+                  <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
+                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Earning 80% Daily Yield)
+                  </p>
                 </div>
                 <div className="flex gap-3">
                   <button 

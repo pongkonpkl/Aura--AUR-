@@ -307,11 +307,12 @@ async def distribute_rewards(force=False):
             
             print(f"[INFO] Splitting 1 AUR ({total_reward}) among {len(active_addresses)} nodes.")
             
-            balances = ledger.setdefault("balances", {})
+            # 🌟 Auto-Compounding Rule: All rewards go to staked_balances
+            staked = ledger.setdefault("staked_balances", {})
             
             for addr in active_addresses:
-                current_bal = int(balances.get(addr, "0"))
-                balances[addr] = str(current_bal + per_node_reward)
+                current_stk = int(staked.get(addr, "0"))
+                staked[addr] = str(current_stk + per_node_reward)
                 
                 proof_hash = hashlib.sha256(f"{today_str}-{addr}-G0LD".encode()).hexdigest()
                 new_event = {
