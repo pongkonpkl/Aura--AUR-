@@ -37,7 +37,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
   const [isCloudMode, setIsCloudMode] = useState(true); // Default to Cloud Mode now
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(0);
-  const [isDistributing, setIsDistributing] = useState(false);
+  const [dailyEmission, setDailyEmission] = useState<string>("0");
+  const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
 
   const IS_HTTPS = window.location.protocol === 'https:';
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
@@ -143,11 +144,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           setStakedBalanceAtom(stake.amount?.toString() || "0");
         }
 
-        // 3. Network Stats (Mocked for now or count profiles)
+        // 3. Network Stats & Daily Emission
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+
+        const { data: dailyData } = await supabase
+          .from('distributions')
+          .select('amount')
+          .gte('created_at', startOfToday.toISOString());
+        
+        const totalMined = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
+        setDailyEmission(totalMined.toString());
+
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        setActiveNodesCount(count || 0);
         setNetworkStats({ 
           activeNodes: count || 12, 
-          sharedPool: "1.0000" 
+          sharedPool: (Number(totalMined) / 1e18).toFixed(4)
         });
 
       } catch (err) {
@@ -209,24 +222,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     }
   };
 
-  const handleForceDistribute = async () => {
-    setIsDistributing(true);
-    try {
-      const res = await fetch(`${LOCAL_ENGINE_URL}/force-distribution`, { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) {
-        addLog("Sovereign Reward Distribution Triggered Successfully.");
-        alert("Rewards distributed to all active nodes and stakers!");
-      } else {
-        addLog(`Distribution Check: ${data.message}`);
-        alert(data.message);
-      }
-    } catch (e) {
-      addLog("Distribution trigger failed. Ensure local engine is active.");
-      alert("Local Engine Unreachable.");
-    }
-    setIsDistributing(false);
-  };
+  // Removed handleForceDistribute (Now managed autonomously by Cloud Cron)
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
     const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
@@ -732,38 +728,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             </div>
           </div>
           
-          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 mt-6 md:mt-0 shadow-xl">
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-5 py-2.5 bg-indigo-500/20 text-indigo-300 rounded-xl font-bold text-sm flex items-center gap-2 border border-indigo-500/20"
-            >
-              <Home size={16}/> <span className="hidden md:inline">Home</span>
-            </button>
-            <button 
-              onClick={() => setActiveModal('seed')}
-              className="px-5 py-2.5 hover:bg-white/10 text-white/50 hover:text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2"
-            >
-              <Key size={16}/> <span className="hidden md:inline">Security</span>
-            </button>
-            <button 
-              onClick={() => setActiveModal('cloud')}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${isCloudMode ? 'bg-blue-500/20 text-blue-300 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'hover:bg-white/10 text-white/50 hover:text-white'}`}
-            >
-              <Globe size={16}/> <span className="hidden md:inline">Cloud Node</span>
-            </button>
-            <button 
-              onClick={() => { setLastCloudOpTime(0); addLog("Sovereign synchronization forced."); }}
-              className="px-5 py-2.5 hover:bg-indigo-500/10 text-indigo-400 rounded-xl font-bold text-sm transition-all flex items-center gap-2 border border-transparent hover:border-indigo-500/20"
-              title="Force sync from network"
-            >
-              <RefreshCw size={16} className={Date.now() - lastCloudOpTime < 120000 ? "animate-spin text-orange-400" : ""}/> 
-              <span className="hidden md:inline">{Date.now() - lastCloudOpTime < 120000 ? "Pending Validation" : "Sync Now"}</span>
-            </button>
+          <div className="flex flex-wrap gap-2 mt-6 md:mt-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-pulse">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
+                Pulse: {(Number(dailyEmission) / 1e18).toFixed(4)} AUR Mined Today
+              </span>
+            </div>
+            
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-xl">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-indigo-500/20 text-indigo-300 rounded-lg font-bold text-[10px] flex items-center gap-2 border border-indigo-500/20"
+              >
+                <Home size={14}/> <span className="hidden lg:inline">Home</span>
+              </button>
+              <button 
+                onClick={() => setActiveModal('cloud')}
+                className={`px-4 py-2 rounded-lg font-bold text-[10px] transition-all flex items-center gap-2 ${isCloudMode ? 'text-blue-300' : 'text-white/40 hover:text-white'}`}
+              >
+                <Database size={14}/> <span className="hidden lg:inline">Cloud Registry</span>
+              </button>
+              <button 
+                onClick={() => { setLastCloudOpTime(Date.now()); window.location.reload(); }}
+                className="px-4 py-2 hover:bg-white/5 text-white/40 hover:text-white rounded-lg font-bold text-[10px] transition-all flex items-center gap-2"
+              >
+                <RefreshCw size={14} /> <span className="hidden lg:inline">Sync Now</span>
+              </button>
+            </div>
+            
             <button 
               onClick={onLogout}
-              className="px-5 py-2.5 hover:bg-red-500/10 text-white/50 hover:text-red-400 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
+              className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10"
             >
-              <LogOut size={16}/> <span className="hidden md:inline">Lock Wallet</span>
+              <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
             </button>
           </div>
         </header>
@@ -925,14 +923,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   <span className="text-[10px] font-mono text-indigo-400 uppercase">Synced</span>
                 </div>
                 
-                <button 
-                  disabled={isDistributing}
-                  onClick={handleForceDistribute}
-                  className="w-full py-3 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-indigo-500/20 transition-all flex items-center justify-center gap-2"
-                >
-                  {isDistributing ? <RefreshCw size={12} className="animate-spin"/> : <Activity size={12}/>}
-                  Trigger PoS Distribution
-                </button>
+                <div className="h-px bg-white/5 my-2"></div>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                  <p className="text-[10px] text-white/30 uppercase font-bold mb-2">Network Energy Progress</p>
+                  <div className="flex justify-between items-end mb-2">
+                    <span className="text-lg font-bold">{(Number(dailyEmission) / 1e18).toFixed(4)} <span className="text-[10px] text-white/40">AUR</span></span>
+                    <span className="text-[10px] text-emerald-400 font-bold">24H LIVE</span>
+                  </div>
+                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-emerald-500 shadow-[0_0_8px_#10b981]" 
+                      style={{ width: `${Math.min((Number(dailyEmission)/1e18)*100, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
             </div>
 
