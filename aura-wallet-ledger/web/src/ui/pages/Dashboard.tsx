@@ -155,7 +155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           .select('amount')
           .gte('created_at', startOfToday.toISOString());
         
-        const sumToday = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
+        const sumToday = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount || "0"), BigInt(0)) || BigInt(0);
         setDailyEmission(sumToday.toString());
 
         // Global Total Supply (Lifetime Mined)
@@ -163,7 +163,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           .from('distributions')
           .select('amount');
         
-        const sumTotal = globalData?.reduce((acc, curr) => acc + BigInt(curr.amount), BigInt(0)) || BigInt(0);
+        const sumTotal = globalData?.reduce((acc, curr) => acc + BigInt(curr.amount || "0"), BigInt(0)) || BigInt(0);
         setTotalEmission(sumTotal.toString());
 
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
