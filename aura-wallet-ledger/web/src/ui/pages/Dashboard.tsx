@@ -361,36 +361,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         </div>
       )}
 
-            <div className="space-y-4 text-left glass-panel p-6 rounded-2xl mb-8">
-              <p className="text-sm font-bold text-white/40 uppercase tracking-widest mb-4">Repair Protocol</p>
-              <div className="flex gap-4 items-start">
-                <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 text-xs flex items-center justify-center flex-shrink-0">1</div>
-                <p className="text-sm">Run <span className="text-indigo-400 font-mono">python fahsai_engine.py</span> locally.</p>
-              </div>
-              <div className="flex gap-4 items-start">
-                <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 text-xs flex items-center justify-center flex-shrink-0">2</div>
-                <p className="text-sm">
-                   Switch to <a href="http://localhost:5173" className="text-indigo-400 underline font-bold">localhost:5173</a> to bypass browser blocks.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <button 
-                onClick={() => window.location.reload()}
-                className="flex-1 py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-white/90 transition-all text-sm"
-              >
-                <RefreshCw size={18} /> Re-verify
-              </button>
-              <button 
-                onClick={() => setIsEngineReady(true)}
-                className="flex-1 py-4 bg-indigo-500/10 text-indigo-400 font-bold rounded-2xl flex items-center justify-center hover:bg-indigo-500/20 transition-all text-sm"
-              >
-                View Sovereign Proof
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Send Modal */}
       {activeModal === 'send' && (
