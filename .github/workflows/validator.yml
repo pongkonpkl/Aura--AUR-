@@ -17,9 +17,12 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install eth-account
+        run: pip install eth-account requests
 
       - name: Run Cloud Validator
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: python cloud_validator.py '${{ toJson(github.event.client_payload) }}'
 
       - name: Commit and Push
