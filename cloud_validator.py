@@ -85,11 +85,20 @@ def process_transaction(payload_src):
     op = data.get("op")
     tx = data.get("tx")
     signature = data.get("signature")
-    tx_hash_id = data.get("tx_hash") # From DB
+    tx_hash_id = data.get("tx_hash") # From DB (Supabase Row)
     
+    # Logic for Supabase Queue: If top-level keys are missing, extract from 'payload' JSONB
+    if not op and "payload" in data:
+        db_payload = data["payload"]
+        if isinstance(db_payload, str):
+            db_payload = json.loads(db_payload)
+        op = db_payload.get("op")
+        tx = db_payload.get("tx")
+        signature = db_payload.get("signature")
+
     if not op or not tx or not signature:
-        print("[ERROR] Missing op, tx or signature")
-        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", "Missing op/tx/signature")
+        print(f"[ERROR] Missing data components for {tx_hash_id or 'unknown'}")
+        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", "Missing op/tx/signature in payload")
         return False
         
     try:
