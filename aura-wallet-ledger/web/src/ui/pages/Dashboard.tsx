@@ -121,13 +121,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         const { data: profile, error: pError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('wallet_address', wallet.address)
+          .eq('wallet_address', wallet.address.toLowerCase())
           .single();
 
         if (pError && pError.code === 'PGRST116') {
           // Profile not found, create one (Auto-registration)
           await supabase.from('profiles').insert({
-            wallet_address: wallet.address,
+            wallet_address: wallet.address.toLowerCase(),
             nickname: 'Aura Sovereign'
           });
           if (!hasLoggedRegistration.current) {
@@ -189,7 +189,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               setDailyEmission("1000000000000000000"); 
             }
 
-            const legacyBalance = BigInt(ledger.balances?.[wallet.address] || "0");
+            const addressKey = wallet.address.toLowerCase();
+            // Case-insensitive lookup for legacy ledger
+            const balances = Object.fromEntries(Object.entries(ledger.balances || {}).map(([k, v]) => [k.toLowerCase(), v]));
+            const stakedBalances = Object.fromEntries(Object.entries(ledger.staked_balances || {}).map(([k, v]) => [k.toLowerCase(), v]));
+            
+            const legacyBalance = BigInt(balances[addressKey] || "0");
             const cloudBalance = BigInt(profile?.balance || "0");
             
             if (legacyBalance > cloudBalance) {
@@ -213,7 +218,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
-          .eq('wallet_address', wallet.address)
+          .eq('wallet_address', wallet.address.toLowerCase())
           .single();
 
         if (profile) {
@@ -248,7 +253,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const { data: profile } = await supabase
         .from('profiles')
         .select('last_nonce')
-        .eq('wallet_address', address)
+        .eq('wallet_address', address.toLowerCase())
         .single();
       
       if (profile && profile.last_nonce !== null) {
