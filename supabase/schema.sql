@@ -24,9 +24,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     to_address TEXT,
     amount NUMERIC NOT NULL,
     burn_penalty NUMERIC DEFAULT 0,
-    tx_type TEXT NOT NULL, -- 'transfer', 'stake', 'unstake', 'reward', 'migration'
+    tx_type TEXT NOT NULL, -- 'transfer', 'stake', 'unstake', 'reward', 'sync_legacy'
     status TEXT DEFAULT 'pending', -- 'pending' -> 'success' or 'failed'
     signature TEXT,
+    payload JSONB, -- Stores the full request for the validator
+    error_log TEXT, -- Stores failure reasons
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -75,6 +77,9 @@ CREATE POLICY "Transactions are viewable by everyone" ON transactions
 
 CREATE POLICY "Service Role has full access to transactions" ON transactions
     FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Anyone can queue a transaction" ON transactions 
+    FOR INSERT WITH CHECK (true);
 
 -- Policies for Mining Logs
 CREATE POLICY "Mining logs are viewable by everyone" ON mining_logs
