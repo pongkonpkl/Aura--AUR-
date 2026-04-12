@@ -34,8 +34,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [cameras, setCameras] = useState<any[]>([]);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
-  const [cloudToken, setCloudToken] = useState(localStorage.getItem('aura_cloud_token') || '');
-  const [isCloudMode, setIsCloudMode] = useState(true); // Default to Cloud Mode now
   const [totalEmission, setTotalEmission] = useState<string>("0");
   const [dailyEmission, setDailyEmission] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
@@ -274,30 +272,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   // Removed handleForceDistribute (Now managed autonomously by Cloud Cron)
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
-    // Audit Fix: Operation Validation
+    // Security Hardening: Transaction Queue Settlement (Token-less)
     const VALID_OPS = ['transfer', 'stake', 'unstake', 'sync_legacy'];
     if (!VALID_OPS.includes(op)) throw new Error(`Security Violation: Invalid Cloud Operation (${op}).`);
 
-    const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
-    const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
-    
-    const res = await fetch(GITHUB_API, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `token ${cloudToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        event_type: 'cloud_tx',
-        client_payload: { op, tx, signature }
-      })
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      if (res.status === 401) throw new Error("GitHub Token (PAT) is invalid or expired.");
-      throw new Error(`Cloud Validator Error: ${txt}`);
-    }
+    const tx_hash = `queued-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+    // Insert into Supabase Transaction Queue
+    const { error } = await supabase
+      .from('transactions')
+      .insert({
+        tx_hash,
+        from_address: wallet.address.toLowerCase(),
+        to_address: tx.to_address?.toLowerCase() || 'System',
+        amount: tx.amount_atom || "0",
+        tx_type: op,
+        signature,
+        status: 'pending',
+        payload: { op, tx, signature } // For Validator pick-up
+      });
+
+    if (error) throw new Error(`Queue Failure: ${error.message}`);
+    addLog(`Transaction queued for Cloud Settlement. Hash: ${tx_hash.slice(0,12)}...`);
   };
 
   const handleSend = async () => {
@@ -377,7 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const signature = await wallet.signMessage(message);
       
       await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-      addLog(`Cloud Unstake Sent. Awaiting cloud validation.`);
+      addLog(`Unstake request broadcasted to Sovereign Fleet.`);
       setLastCloudOpTime(Date.now());
       // Optimistic Update
       setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
@@ -389,6 +385,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       alert(e.message);
     }
     setIsStaking(false);
+  };
+
+  const handleSyncLegacy = async () => {
+    if(!legacyPendingBalance) return;
+    setIsSyncingLegacy(true);
+    try {
+        const res = await fetch(`${REPO_RAW_BASE}/ledger.json?t=${Date.now()}`);
+        const ledger = await res.json();
+        const fullLegacyLiquid = ledger.balances?.[wallet.address] || "0";
+        const fullLegacyStaked = ledger.staked_balances?.[wallet.address] || "0";
+
+        const message = `SYNC_LEGACY:${fullLegacyLiquid}`;
+        const signature = await wallet.signMessage(message);
+
+        await submitCloudTx('sync_legacy', { 
+            address: wallet.address, 
+            amount_atom: fullLegacyLiquid,
+            staked_atom: fullLegacyStaked
+        }, signature);
+
+        addLog(`Legacy Asset Recovery broadcasted. Syncing ${ethers.formatUnits(BigInt(fullLegacyLiquid) + BigInt(fullLegacyStaked), 18)} AUR...`);
+        setLegacyPendingBalance(null);
+        setLastCloudOpTime(Date.now());
+    } catch (e: any) {
+        alert("Recovery Failed: " + e.message);
+    }
+    setIsSyncingLegacy(false);
   };
 
   return (
@@ -684,49 +707,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         </div>
       )}
 
-      {/* Cloud Settings Modal */}
-      {activeModal === 'cloud' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Globe className="text-blue-400"/> Sovereign Cloud Node
-              </h2>
-              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
-            </div>
-            
-            <div className="space-y-6">
-               <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl flex gap-4">
-                 <Globe size={24} className="text-blue-400 flex-shrink-0" />
-                 <p className="text-sm text-white/70">
-                   <strong className="text-blue-400 block mb-1">Enable Cloud Validation</strong>
-                   Connect to your GitHub Repository to bypass "HTTPS Restricted" limits and validate transactions remotely without your PC.
-                 </p>
-               </div>
-
-              <div>
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">
-                  GitHub Personal Access Token (PAT)
-                </label>
-                <input 
-                  value={cloudToken} 
-                  onChange={(e) => {
-                    setCloudToken(e.target.value);
-                    localStorage.setItem('aura_cloud_token', e.target.value);
-                    setIsCloudMode(!!e.target.value);
-                  }} 
-                  type="password" 
-                  placeholder="ghp_..." 
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-blue-500 outline-none transition-all font-mono" 
-                />
-              </div>
-              <p className="text-xs text-white/30 italic text-center">
-                Your token is encrypted and stored locally in this browser.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="max-w-[1400px] mx-auto space-y-8">
         
@@ -780,18 +760,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <Shield size={14}/> <span className="hidden lg:inline">Security</span>
               </button>
               <button 
-                onClick={() => setActiveModal('cloud')}
-                className={`px-4 py-2 rounded-lg font-bold text-[10px] transition-all flex items-center gap-2 ${isCloudMode ? 'text-blue-300' : 'text-white/40 hover:text-white'}`}
-              >
-                <Database size={14}/> <span className="hidden lg:inline">Cloud Registry</span>
-              </button>
-              <button 
                 onClick={() => { setLastCloudOpTime(Date.now()); window.location.reload(); }}
                 className="px-4 py-2 hover:bg-white/5 text-white/40 hover:text-white rounded-lg font-bold text-[10px] transition-all flex items-center gap-2"
               >
                 <RefreshCw size={14} /> <span className="hidden lg:inline">Sync Now</span>
               </button>
             </div>
+
+            {legacyPendingBalance && (
+              <button 
+                onClick={handleSyncLegacy}
+                disabled={isSyncingLegacy}
+                className={`px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-emerald-400/30 animate-pulse hover:scale-105 ${isSyncingLegacy ? 'opacity-50' : ''}`}
+              >
+                <RefreshCw size={14} className={isSyncingLegacy ? 'animate-spin' : ''} /> 
+                <span>{isSyncingLegacy ? 'Syncing...' : 'Sync Old Assets'}</span>
+              </button>
+            )}
             
             <button 
               onClick={onLogout}
