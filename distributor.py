@@ -108,17 +108,27 @@ def distribute():
         
         save_json(LEDGER_FILE, ledger)
         
-        # 🌟 CLOUD SYNC: Log the distribution event to Supabase for the Pulse display
+        # 🌟 CLOUD SYNC: Log the distribution event and update profiles
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         if url and key:
-            headers = { "apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json" }
-            # Log the total daily reward event
+            headers = { "apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" }
+            
+            # 1. Update Every Staker's Profile in Supabase
+            for addr, bstr in staked.items():
+                if int(bstr) > 0:
+                    profile_payload = {
+                        "wallet_address": addr.lower(),
+                        "staked_balance": bstr
+                    }
+                    requests.post(f"{url}/rest/v1/profiles", headers=headers, json=profile_payload)
+
+            # 2. Log the total daily reward event
             requests.post(f"{url}/rest/v1/distributions", headers=headers, json={
                 "amount": str(total_reward),
-                "event_type": "DAILY_PULSE_GLOBAL"
+                "dist_type": "presence" # Fixed column name from schema
             })
-            print("[CLOUD] distribution Pulse logged to Supabase.")
+            print("[CLOUD] Distributions and Profile balances synchronized to Supabase.")
 
         print(f"[SUCCESS] Global rewards distributed.")
 

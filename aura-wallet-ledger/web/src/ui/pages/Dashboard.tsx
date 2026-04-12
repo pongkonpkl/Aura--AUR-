@@ -137,20 +137,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             addLog("Sovereign Identity Registered in Cloud.");
             hasLoggedRegistration.current = true;
           }
-        } else if (profile) {
-          setBalanceAtom(profile.total_accumulated?.toString() || "0");
+        if (profile) {
+          setBalanceAtom(profile.balance?.toString() || "0");
+          setStakedBalanceAtom(profile.staked_balance?.toString() || "0");
           setIsEngineReady(true);
-        }
-
-        // 2. Fetch Staked Balance
-        const { data: stake } = await supabase
-          .from('stakes')
-          .select('amount')
-          .eq('user_id', profile?.id)
-          .single();
-        
-        if (stake) {
-          setStakedBalanceAtom(stake.amount?.toString() || "0");
         }
 
         // 3. Network Stats & Emission Control
@@ -198,7 +188,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             setDailyEmission("1000000000000000000"); 
 
             const legacyBalance = BigInt(ledger.balances?.[wallet.address] || "0");
-            const cloudBalance = BigInt(profile?.total_accumulated || "0");
+            const cloudBalance = BigInt(profile?.balance || "0");
             
             if (legacyBalance > cloudBalance) {
               if (!hasLoggedDiscovery.current) {
@@ -668,7 +658,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               </div>
               
               {!isSeedRevealed && (
-                <div className="absolute inset-0 flex items-center justify-center">
                   <button 
                     onClick={() => setIsSeedRevealed(true)}
                     className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-2xl hover:bg-white/90 transition-all hover:scale-105"
@@ -851,40 +840,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     <p className="text-sm text-purple-400/60 font-medium">Liquid Balance (Available to Spend)</p>
                   </div>
                 </div>
-                {legacyPendingBalance && BigInt(legacyPendingBalance) > BigInt(balanceAtom) && (
-                  <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-left duration-700">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-amber-500/20 rounded-lg text-amber-500"><AlertCircle size={16}/></div>
-                      <div>
-                        <p className="text-[10px] font-black text-amber-500 uppercase">Legacy Wealth Detected</p>
-                        <p className="text-xs text-white/60">
-                          {ethers.formatUnits(legacyPendingBalance, 18)} AUR in old ledger.
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={async () => {
-                        setIsSyncingLegacy(true);
-                        try {
-                          addLog("Initiating Legacy Migration Signature...");
-                          const sig = await wallet.signMessage(`SYNC_LEGACY:${legacyPendingBalance}`);
-                          await submitCloudTx('sync_legacy', { amount: legacyPendingBalance }, sig);
-                          addLog("Legacy Sync request dispatched to Cloud Validator.");
-                          setLegacyPendingBalance(null);
-                        } catch (e: any) {
-                          addLog(`Sync error: ${e.message}`);
-                        } finally {
-                          setIsSyncingLegacy(false);
-                        }
-                      }}
-                      disabled={isSyncingLegacy}
-                      className="px-4 py-2 bg-amber-500 text-black font-black text-[10px] rounded-lg hover:bg-amber-400 transition-all flex items-center gap-2"
-                    >
-                      {isSyncingLegacy ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                      RESTORE NOW
-                    </button>
-                  </div>
-                )}
+                {/* Legacy wealth has been migrated to Supabase-first settlement. No restore required. */}
 
                 <div className="flex gap-3">
                   <button 
