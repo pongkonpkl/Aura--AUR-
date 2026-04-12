@@ -129,7 +129,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         if (pError && pError.code === 'PGRST116') {
           // Profile not found, create one (Auto-registration)
           await supabase.from('profiles').insert({
-            id: (await supabase.auth.getUser()).data.user?.id || undefined, 
             wallet_address: wallet.address,
             nickname: 'Aura Sovereign'
           });
@@ -137,6 +136,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             addLog("Sovereign Identity Registered in Cloud.");
             hasLoggedRegistration.current = true;
           }
+        } 
+
         if (profile) {
           setBalanceAtom(profile.balance?.toString() || "0");
           setStakedBalanceAtom(profile.staked_balance?.toString() || "0");
