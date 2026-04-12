@@ -184,7 +184,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             // 🌟 SYNC GLOBAL TOTALS
             if (ledger.total_supply) setTotalEmission(ledger.total_supply);
             // Estimate pulse from last 24h history or fixed 1.0 AUR base
-            setDailyEmission("1000000000000000000"); 
+            // Use the value from Supabase if available, otherwise fallback
+            if (sumToday === BigInt(0)) {
+              setDailyEmission("1000000000000000000"); 
+            }
 
             const legacyBalance = BigInt(ledger.balances?.[wallet.address] || "0");
             const cloudBalance = BigInt(profile?.balance || "0");
@@ -724,7 +727,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               <h1 className="text-3xl font-bold tracking-tight text-gradient">Sovereign Command</h1>
               <div className="flex items-center gap-3 mt-1">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-300 uppercase tracking-widest px-2 py-0.5 rounded-md bg-indigo-500/10">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]" />
                   Presence Active
                 </span>
                 <span className="text-xs text-white/40 uppercase tracking-tighter">Identity: {wallet.address.slice(0,6)}...{wallet.address.slice(-4)}</span>
@@ -739,7 +742,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 Total Supply: {ethers.formatUnits(totalEmission, 18)} AUR
               </span>
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-pulse">
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
                 Pulse: {ethers.formatUnits(dailyEmission, 18)} AUR Today
@@ -771,7 +774,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               <button 
                 onClick={handleSyncLegacy}
                 disabled={isSyncingLegacy}
-                className={`px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-emerald-400/30 animate-pulse hover:scale-105 ${isSyncingLegacy ? 'opacity-50' : ''}`}
+                className={`px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-emerald-400/30 hover:bg-emerald-400 hover:scale-105 ${isSyncingLegacy ? 'opacity-50' : ''}`}
               >
                 <RefreshCw size={14} className={isSyncingLegacy ? 'animate-spin' : ''} /> 
                 <span>{isSyncingLegacy ? 'Syncing...' : 'Sync Old Assets'}</span>
@@ -949,8 +952,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   </div>
                   <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-emerald-500 shadow-[0_0_8px_#10b981]" 
-                      style={{ width: `${Math.min((Number(BigInt(dailyEmission) / BigInt(1e14)) / 10000) * 100, 100)}%` }}
+                      className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000 ease-out" 
+                      style={{ width: `${Math.min((parseFloat(ethers.formatUnits(dailyEmission, 18)) / 1.0) * 100, 100)}%` }}
                     ></div>
                   </div>
                 </div>
