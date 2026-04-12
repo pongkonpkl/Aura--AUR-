@@ -42,6 +42,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
 
+  const isValidAddress = recipient ? ethers.isAddress(recipient) : null;
+
   const hasLoggedRegistration = useRef(false);
   const hasLoggedDiscovery = useRef(false);
 
@@ -502,14 +504,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               <div className="relative">
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Recipient Address</label>
                 <div className="flex gap-2">
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 group">
                     <input 
                       value={recipient} 
                       onChange={e=>setRecipient(e.target.value)} 
                       type="text" 
                       placeholder="0x..." 
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-mono text-sm" 
+                      className={`w-full bg-white/5 border rounded-xl px-4 py-4 outline-none transition-all font-mono text-sm pr-12 ${
+                        isValidAddress === true ? 'border-emerald-500/50 focus:border-emerald-500 text-emerald-100' : 
+                        isValidAddress === false ? 'border-red-500/50 focus:border-red-500 text-red-100' : 
+                        'border-white/10 focus:border-indigo-500'
+                      }`} 
                     />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                      {isValidAddress === true && <CheckCircle2 size={18} className="text-emerald-500 animate-in zoom-in duration-300" />}
+                      {isValidAddress === false && <AlertCircle size={18} className="text-red-500 animate-in shake duration-300" />}
+                    </div>
                   </div>
                   <button 
                     onClick={() => setIsScannerOpen(!isScannerOpen)}
@@ -518,6 +528,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     <Scan size={20} />
                   </button>
                 </div>
+                {isValidAddress === false && (
+                  <p className="text-[10px] font-bold text-red-400 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
+                    Invalid Sovereign Address Format or Checksum Error
+                  </p>
+                )}
               </div>
 
               {isScannerOpen && (
@@ -559,7 +574,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Amount (AUR)</label>
                 <input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} type="number" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-bold" />
               </div>
-              <button disabled={isSending || !sendAmount || !recipient || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !recipient || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+              <button disabled={isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
                 {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
               </button>
             </div>
