@@ -6,6 +6,10 @@ on:
 
 jobs:
   validate:
+    # Required to push ledger updates back to the repo
+    permissions:
+      contents: write
+      
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -22,8 +26,9 @@ jobs:
       - name: Run Cloud Validator
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python cloud_validator.py '${{ toJson(github.event.client_payload) }}'
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: python cloud_validator.py
 
       - name: Commit and Push
         run: |

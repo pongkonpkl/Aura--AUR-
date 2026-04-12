@@ -172,7 +172,13 @@ def process_transaction(payload_str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("[ERROR] Payload required")
-        sys.exit(1)
-    process_transaction(sys.argv[1])
+    # Prioritize environment variable (standard for GitHub Actions now)
+    payload_input = os.environ.get("CLIENT_PAYLOAD")
+    
+    if not payload_input:
+        if len(sys.argv) < 2:
+            print("[ERROR] No payload provided via CLIENT_PAYLOAD or CLI args.")
+            sys.exit(1)
+        payload_input = sys.argv[1]
+        
+    process_transaction(payload_input)
