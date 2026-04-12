@@ -273,8 +273,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
 
   const submitCloudTx = async (op: string, tx: any, signature: string) => {
     // Audit Fix: Operation Validation
-    const VALID_OPS = ['send', 'stake', 'unstake'];
-    if (!VALID_OPS.includes(op)) throw new Error("Security Violation: Invalid Cloud Operation.");
+    const VALID_OPS = ['transfer', 'stake', 'unstake', 'sync_legacy'];
+    if (!VALID_OPS.includes(op)) throw new Error(`Security Violation: Invalid Cloud Operation (${op}).`);
 
     const GITHUB_REPO = "pongkonpkl/Aura--AUR-";
     const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
