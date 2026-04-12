@@ -659,6 +659,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               </div>
               
               {!isSeedRevealed && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
                   <button 
                     onClick={() => setIsSeedRevealed(true)}
                     className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-2xl hover:bg-white/90 transition-all hover:scale-105"
