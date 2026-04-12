@@ -1,53 +1,54 @@
-# Aura: Sovereign Cloud ☁️
+# Aura: Sovereign Infrastructure ☁️🛡️
 
-> **A Cloud-Native, Autonomous Proof-of-Presence & Proof-of-Stake Ecosystem**
+> **A Cloud-Settled, GitHub-Audited Proof-of-Presence & Proof-of-Stake Ecosystem**
 
-Aura represents the final evolutionary step of the network, transitioning from local-only hardware to a **Global Sovereign Cloud Shared Stack**. By leveraging Supabase and Edge Computing, Aura provides an unblockable, 24/7 financial ledger accessible via HTTPS from any device.
+Aura represents the final evolutionary step of the network, transitioning to an **Off-chain Settlement with Centralized Data Availability** model. By leveraging Supabase for high-speed state and GitHub for immutable public auditing, Aura provides a secure, unblockable financial ledger accessible from any device.
 
 ---
 
 ## 🔱 Global Participation (Mining & Staking)
 
-Aura is now a fully autonomous shared ecosystem. Rewards are minted and distributed hourly via the Cloud Reward Engine.
+Aura is a fully autonomous shared ecosystem where rewards are minted and distributed daily via the Cloud Reward Engine (GitHub Actions).
 
 - **Hybrid Rewards**: 
-  - **80% PoP (Proof-of-Presence)**: Shared among all nodes active in the cloud in the last hour.
+  - **80% PoP (Proof-of-Presence)**: Shared among all nodes active in the cloud (Heartbeat verified).
   - **20% PoS (Proof-of-Stake)**: Shared among all AUR stakers based on their locked balance.
-- **Learn How to Participate**: [MINING_GUIDE.md](./MINING_GUIDE.md) | [Sovereign Tech Whitepaper](./TECH_WHITEPAPER.md)
+- **Official Documentation**: [AURA_WHITE_PAPER_2026.md](./AURA_WHITE_PAPER_2026.md) | [MINING_GUIDE.md](./MINING_GUIDE.md)
 
 ---
 
-## 🏗️ Cloud-Native Architecture
+## 🏗️ Sovereign Infrastructure Architecture
 
-The system has been upgraded to a professional cloud stack, ensuring zero downtime, extreme scalability, and unbreakable uptime:
+The system utilizes a dual-layer architecture designed for maximum speed and absolute transparency:
 
-### 1. The Sovereign Cloud Core (Supabase)
-Instead of a local Python process, Aura now breathes on the **Supabase Cloud Platform**:
-- **Real-time Synchronization**: State changes (balances, stakes) are pushed to the dashboard instantly via WebSockets.
-- **Edge Computing**: Reward distribution logic runs on Deno-based Edge Functions, ensuring 24/7 operation without local hardware.
-- **Row Level Security (RLS)**: Cryptographic isolation ensuring only you can access and modify your sovereign profile.
+### 1. The Settlement Layer (Supabase)
+The real-time source of truth for the Aura network:
+- **Profiles & Balances**: Authoritative storage for liquid and staked balances.
+- **Supabase Real-time**: State changes are pushed to the dashboard instantly.
+- **RLS Guard**: Cryptographic isolation ensures that only the Validator and the owner can interact with profile data.
 
-### 2. The Transparent Ledger (Postgres)
-- **Profiles**: Stores total accumulated AUR and node presence history.
-- **Stakes**: Manages off-chain staking balances and pending rewards.
-- **Distributions**: A permanent, transparent log of every POP and POS reward event.
+### 2. The Verification Layer (GitHub Actions)
+The network's "Validator Node" runs autonomously on GitHub:
+- **Signature Verification**: Every transaction (Send/Stake) is cryptographically signed by the user and verified by the Cloud Validator.
+- **Immutable Ledger**: Successful transactions are appended to `ledger.json` in this repository, creating a permanent, public audit trail.
+- **Automated Distribution**: Daily rewards are calculated and distributed by the GitHub Cloud Distributor at midnight UTC.
 
-### 3. The Celestial Interface (React + Vite)
-A high-fidelity dashboard built for the modern sovereign user.
-- **HTTPS Compliant**: No more "Sovereign Link Restricted" errors; connects securely to the cloud.
-- **Auto-Sync**: Automatically registers your node and heartbeats upon login.
-- **Glassmorphic UX**: Optimized for high-stakes transactions with smooth micro-animations.
+### 3. The Celestial Dashboard (React + Vite)
+A high-fidelity interface for the modern sovereign commander.
+- **Full Transparency**: View real-time network logs, active node counts, and personal treasury status.
+- **Optimization**: Optimized for mobile and desktop with a premium glassmorphic design.
 
 ---
 
 ## 🛠️ Tech Stack & Security
 
-| Layer | Technology | Status |
+| Layer | Technology | Role |
 | :--- | :--- | :--- |
-| **Backend** | Supabase (Postgres + GoTrue) | Global Ready |
-| **Logic** | Deno Edge Functions | Automated |
-| **Security** | Replay Protection (Nonces) | Active |
-| **Frontend** | React 18, Vite, GSAP | Premium Glass |
+| **State** | Supabase (Postgres) | Authoritative Balance & Presence |
+| **Logic** | Python (Cloud Validator) | Transaction Settlement |
+| **Ledger** | GitHub (JSON) | Public Immutable Audit Trail |
+| **Automation** | GitHub Actions | Daily Distribution (PoP/PoS) |
+| **Frontend** | React, Vite, Framer Motion | High-Fidelity Dashboard |
 
 ---
 
@@ -55,19 +56,14 @@ A high-fidelity dashboard built for the modern sovereign user.
 
 ### Prerequisites
 - Node.js & npm
-- A Supabase Project ([Setup Guide](./SUPABASE_SETUP.md))
+- A Supabase Project with the [correct schema](./supabase/schema.sql)
 
 ### Installation
 ```bash
+# Clone the repository
+git clone https://github.com/pongkonpkl/Aura--AUR-
 cd aura-wallet-ledger/web
 npm install
-```
-
-### Configure Environment
-Create a `.env.local` file in `aura-wallet-ledger/web/`:
-```bash
-VITE_SUPABASE_URL=your_project_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 ### Launch
@@ -78,7 +74,7 @@ npm run dev
 ---
 
 ## Security
-Aura utilizes cryptographic signatures for every sensitive operation (Transfer/Stake). Every transaction includes a **unique nonce** to prevent replay attacks and ensures that even on a public cloud, your assets remain under your absolute control.
+Aura utilizes **EIP-191 compliant signatures** for every operation. Every transaction includes a **unique nonce** stored in Supabase to prevent replay attacks, ensuring that your sovereign assets remain under your absolute control even in a cloud-native environment.
 
 ---
-Built with sovereign autonomy by the Aura Core Foundation • 2026.
+Built with sovereign autonomy by **Than** & The Aura Core Team • 2026.

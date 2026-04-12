@@ -7,11 +7,12 @@
 ---
 
 ## 1. System Architecture Overview
-The Aura network has been upgraded to a **Hybrid Sovereign Cloud** model. This ensures that assets are secure on the local ledger while providing high-speed, mobile-accessible data via the Supabase Cloud Registry.
+The Aura network has been upgraded to a **Supabase-First Sovereign Infrastructure** (Off-chain Settlement with Centralized Data Availability).
 
-- **Source of Truth**: `ledger.json` (GitHub Repository)
-- **UI State**: React + Supabase (Real-time distribution)
-- **Validation**: GitHub Actions (Autonomous Cloud Validator)
+- **Primary State Source**: Supabase `profiles` (Authoritative Balances & Nonces)
+- **Public Audit Ledger**: `ledger.json` (Immutable GitHub History)
+- **Validation**: GitHub Actions (Autonomous Cloud Validator v3)
+- **Settlement Logic**: Real-time DB Upsert with RLS Protection
 
 ---
 
