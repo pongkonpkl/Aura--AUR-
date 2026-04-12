@@ -43,6 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
 
   const isValidAddress = recipient ? ethers.isAddress(recipient) : null;
+  const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
 
   const hasLoggedRegistration = useRef(false);
   const hasLoggedDiscovery = useRef(false);
@@ -517,7 +518,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                       }`} 
                     />
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                      {isValidAddress === true && <CheckCircle2 size={18} className="text-emerald-500 animate-in zoom-in duration-300" />}
+                      {isValidAddress === true && !isSelfSend && <CheckCircle2 size={18} className="text-emerald-500 animate-in zoom-in duration-300" />}
+                      {isValidAddress === true && isSelfSend && <AlertCircle size={18} className="text-orange-500 animate-in bounce duration-300" />}
                       {isValidAddress === false && <AlertCircle size={18} className="text-red-500 animate-in shake duration-300" />}
                     </div>
                   </div>
@@ -529,8 +531,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   </button>
                 </div>
                 {isValidAddress === false && (
-                  <p className="text-[10px] font-bold text-red-400 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
+                  <p className="text-[10px] font-bold text-red-500 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
                     Invalid Sovereign Address Format or Checksum Error
+                  </p>
+                )}
+                {isValidAddress === true && isSelfSend && (
+                  <p className="text-[10px] font-bold text-orange-400 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
+                    ⚠️ Warning: You are sending AUR to your own Sovereign Identity
                   </p>
                 )}
               </div>
