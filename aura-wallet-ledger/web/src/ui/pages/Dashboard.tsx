@@ -180,13 +180,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           activeNodes: count || 0, 
           sharedPool: ethers.formatUnits(sumToday, 18)
         });
+        
+        // Initial fallbacks from Cloud data, then Ledger fetch...
+        if (sumTotal > 0n) setTotalEmission(sumTotal.toString());
+        if (sumToday > 0n) setDailyEmission(sumToday.toString());
+
 
         // 4. Legacy Balance Detection
         try {
-          const res = await fetch(`${REPO_RAW_BASE}/ledger.json`);
+          const res = await fetch(`${REPO_RAW_BASE}/ledger.json?t=${Date.now()}`);
           if (res.ok) {
             const ledger = await res.json();
-            const legacyBalance = BigInt(ledger.balances[wallet.address] || "0");
+            
+            // 🌟 SYNC GLOBAL TOTALS
+            if (ledger.total_supply) setTotalEmission(ledger.total_supply);
+            // Estimate pulse from last 24h history or fixed 1.0 AUR base
+            setDailyEmission("1000000000000000000"); 
+
+            const legacyBalance = BigInt(ledger.balances?.[wallet.address] || "0");
             const cloudBalance = BigInt(profile?.total_accumulated || "0");
             
             if (legacyBalance > cloudBalance) {
