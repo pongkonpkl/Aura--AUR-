@@ -19,7 +19,7 @@ def save_json(filepath, data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
-def update_supabase(address, amount_atom=None, nonce=None):
+def update_supabase(address, amount_atom=None, nonce=None, **kwargs):
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
@@ -45,6 +45,9 @@ def update_supabase(address, amount_atom=None, nonce=None):
             payload["total_accumulated"] = str(amount_atom)
         if nonce is not None:
             payload["last_nonce"] = int(nonce)
+        if "staked_amount" in kwargs:
+            payload["staked_amount"] = str(kwargs["staked_amount"])
+
             
         if payload:
             requests.patch(update_url, headers=headers, json=payload)
@@ -159,7 +162,14 @@ def process_transaction(payload_str):
         
     ledger.setdefault("history", []).insert(0, new_event)
     save_json(LEDGER_FILE, ledger)
+    
+    # Sync final balances to Cloud
+    stk_bal = ledger.get("staked_balances", {}).get(from_address, "0")
+    pos_liq = ledger.get("balances", {}).get(from_address, "0")
+    update_supabase(from_address, amount_atom=pos_liq, staked_amount=stk_bal)
+    
     print(f"[SUCCESS] Cloud Validator Processed: {new_event['id']}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

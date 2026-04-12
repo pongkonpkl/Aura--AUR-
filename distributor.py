@@ -2,6 +2,7 @@ import json
 import hashlib
 from datetime import datetime
 import os
+import requests
 
 LEDGER_FILE = "ledger.json"
 NODES_FILE = "nodes.json"
@@ -106,7 +107,21 @@ def distribute():
         ledger["total_supply"] = str(total_supply + total_reward)
         
         save_json(LEDGER_FILE, ledger)
+        
+        # 🌟 CLOUD SYNC: Log the distribution event to Supabase for the Pulse display
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if url and key:
+            headers = { "apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json" }
+            # Log the total daily reward event
+            requests.post(f"{url}/rest/v1/distributions", headers=headers, json={
+                "amount": str(total_reward),
+                "event_type": "DAILY_PULSE_GLOBAL"
+            })
+            print("[CLOUD] distribution Pulse logged to Supabase.")
+
         print(f"[SUCCESS] Global rewards distributed.")
+
     else:
         print("[WARNING] No active nodes or stakers found.")
 

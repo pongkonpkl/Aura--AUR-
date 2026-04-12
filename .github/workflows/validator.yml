@@ -22,7 +22,7 @@ jobs:
       - name: Run Cloud Validator
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python cloud_validator.py '${{ toJson(github.event.client_payload) }}'
 
       - name: Commit and Push

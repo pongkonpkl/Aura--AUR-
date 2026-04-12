@@ -47,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const hasLoggedDiscovery = useRef(false);
 
   const IS_HTTPS = window.location.protocol === 'https:';
-  const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/master";
+  const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
   const LOCAL_ENGINE_URL = "http://localhost:8000";
 
   const MOCK_SEED = wallet.mnemonic?.phrase?.split(' ') || [];
