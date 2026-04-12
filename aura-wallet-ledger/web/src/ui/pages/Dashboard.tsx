@@ -1034,9 +1034,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                       </div>
                       <div className="text-right">
                         <p className={`text-xs font-mono font-black ${isOut || isStake ? 'text-white/40' : 'text-emerald-400'}`}>
-                          {isOut || isStake ? '-' : '+'}{ethers.formatUnits(tx.amount || "0", 18)}
+                          {isOut || isStake ? '-' : '+'}{(() => {
+                            try { return ethers.formatUnits(tx.amount?.toString() || "0", 18); }
+                            catch { return "0.00"; }
+                          })()}
                         </p>
-                        <p className="text-[8px] text-white/10 font-mono tracking-tighter">#{tx.tx_hash?.slice(-8)}</p>
+                        <p className="text-[8px] text-white/10 font-mono tracking-tighter">#{tx.tx_hash?.slice(-8) || 'unknown'}</p>
                       </div>
                     </div>
                   );
@@ -1097,13 +1100,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                   <p className="text-[10px] text-white/30 uppercase font-bold mb-2">Network Energy Progress</p>
                   <div className="flex justify-between items-end mb-2">
-                    <span className="text-lg font-bold">{ethers.formatUnits(dailyEmission, 18)} <span className="text-[10px] text-white/40">AUR</span></span>
+                    <span className="text-lg font-bold">
+                      {(() => {
+                        try { return ethers.formatUnits(dailyEmission || "0", 18); }
+                        catch { return "0.00"; }
+                      })()} 
+                      <span className="text-[10px] text-white/40"> AUR</span>
+                    </span>
                     <span className="text-[10px] text-emerald-400 font-bold">24H LIVE</span>
                   </div>
                   <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000 ease-out" 
-                      style={{ width: `${Math.min((parseFloat(ethers.formatUnits(dailyEmission, 18)) / 1.0) * 100, 100)}%` }}
+                      style={{ width: `${(() => {
+                        try {
+                          return Math.min((parseFloat(ethers.formatUnits(dailyEmission || "0", 18)) / 1.0) * 100, 100);
+                        } catch { return 0; }
+                      })()}%` }}
                     ></div>
                   </div>
                 </div>
