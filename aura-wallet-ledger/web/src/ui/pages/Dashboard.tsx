@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
@@ -41,6 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
   const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
   const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
+  const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
 
   const hasLoggedRegistration = useRef(false);
   const hasLoggedDiscovery = useRef(false);
@@ -177,7 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         setActiveNodesCount(count || 0);
         setNetworkStats({ 
           activeNodes: count || 0, 
-          sharedPool: (Number(sumToday) / 1e18).toFixed(4)
+          sharedPool: ethers.formatUnits(sumToday, 18)
         });
 
         // 4. Legacy Balance Detection
@@ -753,13 +754,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
               <Globe size={12} className="text-indigo-400" />
               <span className="text-[10px] font-black text-white/60 uppercase tracking-tighter">
-                Total Supply: {(Number(totalEmission) / 1e18).toFixed(4)} AUR
+                Total Supply: {ethers.formatUnits(totalEmission, 18)} AUR
               </span>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-pulse">
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
-                Pulse: {(Number(dailyEmission) / 1e18).toFixed(4)} AUR Today
+                Pulse: {ethers.formatUnits(dailyEmission, 18)} AUR Today
               </span>
             </div>
             
@@ -989,13 +990,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                   <p className="text-[10px] text-white/30 uppercase font-bold mb-2">Network Energy Progress</p>
                   <div className="flex justify-between items-end mb-2">
-                    <span className="text-lg font-bold">{(Number(dailyEmission) / 1e18).toFixed(4)} <span className="text-[10px] text-white/40">AUR</span></span>
+                    <span className="text-lg font-bold">{ethers.formatUnits(dailyEmission, 18)} <span className="text-[10px] text-white/40">AUR</span></span>
                     <span className="text-[10px] text-emerald-400 font-bold">24H LIVE</span>
                   </div>
                   <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-emerald-500 shadow-[0_0_8px_#10b981]" 
-                      style={{ width: `${Math.min((Number(dailyEmission)/1e18)*100, 100)}%` }}
+                      style={{ width: `${Math.min((Number(BigInt(dailyEmission) / BigInt(1e14)) / 10000) * 100, 100)}%` }}
                     ></div>
                   </div>
                 </div>
