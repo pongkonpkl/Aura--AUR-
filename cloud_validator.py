@@ -20,13 +20,14 @@ def save_json(filepath, data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
-# Global Configuration (Stripped for security/stability)
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+# Global Configuration (Robust fetching)
+SUPABASE_URL = (os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL") or "").strip()
+SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SERVICE_ROLE_KEY") or "").strip()
 
 def get_supabase_headers():
     if not SUPABASE_URL or not SUPABASE_KEY:
-        raise Exception("Supabase environment variables (URL/SERVICE_ROLE_KEY) missing.")
+        print("[WARNING] Supabase environment variables missing. Headers may be invalid.")
+        return {}
     return {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
