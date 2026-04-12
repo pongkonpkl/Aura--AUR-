@@ -20,54 +20,51 @@ def save_json(filepath, data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
+# Global Configuration (Stripped for security/stability)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
 def get_supabase_headers():
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
+    if not SUPABASE_URL or not SUPABASE_KEY:
         raise Exception("Supabase environment variables (URL/SERVICE_ROLE_KEY) missing.")
     return {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "return=representation"
     }
 
 def get_profile(address):
-    url = os.environ.get("SUPABASE_URL")
     headers = get_supabase_headers()
-    resp = requests.get(f"{url}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers)
+    resp = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers)
     profiles = resp.json()
     if not profiles:
         # Create profile if missing (Migration/Auto-onboarding)
         payload = {"wallet_address": address.lower(), "balance": "0", "staked_balance": "0", "last_nonce": 0}
-        resp = requests.post(f"{url}/rest/v1/profiles", headers=headers, json=payload)
+        resp = requests.post(f"{SUPABASE_URL}/rest/v1/profiles", headers=headers, json=payload)
         return resp.json()[0]
     return profiles[0]
 
 def update_supabase_profile(address, updates):
-    url = os.environ.get("SUPABASE_URL")
     headers = get_supabase_headers()
-    requests.patch(f"{url}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers, json=updates)
+    requests.patch(f"{SUPABASE_URL}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers, json=updates)
 
 def log_transaction_to_supabase(tx_data):
-    url = os.environ.get("SUPABASE_URL")
     headers = get_supabase_headers()
-    requests.post(f"{url}/rest/v1/transactions", headers=headers, json=tx_data)
+    requests.post(f"{SUPABASE_URL}/rest/v1/transactions", headers=headers, json=tx_data)
 
 def fetch_pending_transactions():
-    url = os.environ.get("SUPABASE_URL")
     headers = get_supabase_headers()
     # Fetch all transactions with 'pending' status
-    resp = requests.get(f"{url}/rest/v1/transactions?status=eq.pending", headers=headers)
+    resp = requests.get(f"{SUPABASE_URL}/rest/v1/transactions?status=eq.pending", headers=headers)
     return resp.json()
 
 def update_transaction_status(tx_hash, status, error_msg=None):
-    url = os.environ.get("SUPABASE_URL")
     headers = get_supabase_headers()
     payload = {"status": status}
     if error_msg:
         payload["error_log"] = error_msg
-    requests.patch(f"{url}/rest/v1/transactions?tx_hash=eq.{tx_hash}", headers=headers, json=payload)
+    requests.patch(f"{SUPABASE_URL}/rest/v1/transactions?tx_hash=eq.{tx_hash}", headers=headers, json=payload)
 
 def process_transaction(payload_src):
     """
