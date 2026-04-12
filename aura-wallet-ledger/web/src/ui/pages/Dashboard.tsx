@@ -39,6 +39,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
   const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
   const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
+  const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
 
   const hasLoggedRegistration = useRef(false);
@@ -137,8 +138,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         } 
 
         if (profile) {
-          setBalanceAtom(profile.balance?.toString() || "0");
-          setStakedBalanceAtom(profile.staked_balance?.toString() || "0");
+          const serverBalance = BigInt(profile.balance || "0");
+          const serverStaked = BigInt(profile.staked_balance || "0");
+          
+          // Apply Optimistic Offsets
+          const pendingOut = pendingTxs.filter(t => t.type === 'transfer' || t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
+          const pendingIn = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
+          const pendingStakeOut = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
+          const pendingStakeIn = pendingTxs.filter(t => t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
+
+          setBalanceAtom((serverBalance - pendingOut + pendingIn).toString());
+          setStakedBalanceAtom((serverStaked - pendingStakeOut + pendingStakeIn).toString());
           setIsEngineReady(true);
         }
 
@@ -244,8 +254,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       clearInterval(syncInterval);
       clearInterval(heartbeatInterval);
     };
-  }, [wallet]);
+  }, [wallet, pendingTxs]);
 
+  // 🕵️ Transaction Status Watcher (The "Short-term Memory" Manager)
+  useEffect(() => {
+    if (pendingTxs.length === 0) return;
+
+    const watchStatus = async () => {
+      const hashes = pendingTxs.map(t => t.hash);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('tx_hash, status, error_log')
+        .in('tx_hash', hashes);
+
+      if (error || !data) return;
+
+      data.forEach(tx => {
+        if (tx.status === 'success') {
+          // Settlement achieved!
+          setPendingTxs(prev => prev.filter(p => p.hash !== tx.tx_hash));
+          addLog(`✅ Cloud Settlement Success: ${tx.tx_hash.slice(0, 12)}...`);
+        } else if (tx.status === 'failed') {
+          // Settlement failed! Clear memory and alert user
+          setPendingTxs(prev => prev.filter(p => p.hash !== tx.tx_hash));
+          addLog(`❌ ERROR: Settlement Failed for ${tx.tx_hash.slice(0, 12)}...`);
+          if (tx.error_log) addLog(`> Detail: ${tx.error_log}`);
+        }
+      });
+    };
+
+    const interval = setInterval(watchStatus, 5000); // Check every 5s for fast feedback
+    return () => clearInterval(interval);
+  }, [pendingTxs]);
 
   const fetchNonce = async (address: string): Promise<number> => {
     try {
@@ -302,6 +342,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
 
     if (error) throw new Error(`Queue Failure: ${error.message}`);
     addLog(`Transaction queued for Cloud Settlement. Hash: ${tx_hash.slice(0,12)}...`);
+    return tx_hash;
   };
 
   const handleSend = async () => {
@@ -318,7 +359,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const signature = await wallet.signMessage(message);
       
       // All transactions now go through Aura Cloud (Supabase/GitHub)
-      await submitCloudTx('transfer', { 
+      const txHash = await submitCloudTx('transfer', { 
           from_address: wallet.address, 
           to_address: recipient, 
           amount_atom: amountAtom.toString(),
@@ -327,8 +368,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       
       addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting validation.`);
       setLastCloudOpTime(Date.now());
-      // Optimistic Update
-      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      
+      // Memory Storage for Optimistic UI
+      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
       
       setActiveModal(null);
       setRecipient("");
@@ -352,12 +394,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const message = `AUR_STAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
-      await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+      const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
       addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
       setLastCloudOpTime(Date.now());
-      // Optimistic Update
-      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
+      
+      // Memory Storage for Optimistic UI
+      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
       
       setActiveModal(null);
       setStakeAmount("");
@@ -380,12 +422,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
-      await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+      const txHash = await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
       addLog(`Unstake request broadcasted to Sovereign Fleet.`);
       setLastCloudOpTime(Date.now());
-      // Optimistic Update
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
+      
+      // Memory Storage for Optimistic UI
+      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
       
       setActiveModal(null);
       setStakeAmount("");
