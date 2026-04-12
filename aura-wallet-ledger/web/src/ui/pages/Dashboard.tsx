@@ -3,7 +3,7 @@ import {
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
   X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2, Lock
+  Copy, Scan, Camera, Maximize2, Lock, Zap
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
@@ -40,6 +40,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
   const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
   const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
 
   const isValidAddress = recipient ? ethers.isAddress(recipient) : null;
@@ -183,7 +184,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
           sharedPool: ethers.formatUnits(sumToday, 18)
         });
         
-        // Initial fallbacks from Cloud data, then Ledger fetch...
+        // 4. Fetch Transaction History
+        const { data: txHistory } = await supabase
+          .from('transactions')
+          .select('*')
+          .or(`from_address.eq.${wallet.address.toLowerCase()},to_address.eq.${wallet.address.toLowerCase()}`)
+          .order('created_at', { ascending: false })
+          .limit(15);
+        
+        if (txHistory) setHistory(txHistory);
+
+        // 5. Initial fallbacks from Cloud data, then Ledger fetch...
         if (sumTotal > 0n) setTotalEmission(sumTotal.toString());
         if (sumToday > 0n) setDailyEmission(sumToday.toString());
 
@@ -372,7 +383,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting validation.`);
       setLastCloudOpTime(Date.now());
       
-      // Memory Storage for Optimistic UI
+      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
       setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
       
       setActiveModal(null);
@@ -401,7 +413,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
       setLastCloudOpTime(Date.now());
       
-      // Memory Storage for Optimistic UI
+      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
       setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
       
       setActiveModal(null);
@@ -429,7 +443,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       addLog(`Unstake request broadcasted to Sovereign Fleet.`);
       setLastCloudOpTime(Date.now());
       
-      // Memory Storage for Optimistic UI
+      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
       setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
       
       setActiveModal(null);
@@ -968,6 +984,71 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
 
             </div>
 
+            {/* Sovereign Activity */}
+            <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
+              <div className="bg-white/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <Activity size={16} className="text-emerald-400" />
+                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Activity</span>
+                </div>
+                <div className="text-[10px] font-black text-white/20 uppercase">Last 15 Records</div>
+              </div>
+              <div className="max-h-[320px] overflow-y-auto divide-y divide-white/5 scrollbar-thin">
+                {history.map((tx, i) => {
+                  const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase();
+                  const isStake = tx.tx_type === 'stake';
+                  const isUnstake = tx.tx_type === 'unstake';
+                  const isReward = tx.tx_type === 'reward' || tx.tx_type === 'presence';
+                  
+                  return (
+                    <div key={tx.id || i} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2 rounded-lg ${
+                          isReward ? 'bg-amber-500/10 text-amber-400' :
+                          isStake ? 'bg-emerald-500/10 text-emerald-400' :
+                          isUnstake ? 'bg-orange-500/10 text-orange-400' :
+                          isOut ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'
+                        }`}>
+                          {isReward ? <Zap size={14} /> :
+                           isStake ? <Lock size={14} /> :
+                           isUnstake ? <RefreshCw size={14} /> :
+                           isOut ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors">
+                            {isReward ? 'Network Protocol Yield' :
+                             isStake ? 'Vault Allocation (Stake)' :
+                             isUnstake ? 'Vault Release (Unstake)' :
+                             isOut ? `Sent: ${tx.to_address?.slice(0,6)}...` : `Recv: ${tx.from_address?.slice(0,6)}...`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[9px] text-white/20">{new Date(tx.created_at).toLocaleString()}</span>
+                            <span className={`text-[9px] font-black uppercase tracking-tighter ${
+                              tx.status === 'success' ? 'text-emerald-500/60' :
+                              tx.status === 'failed' ? 'text-red-500/60' : 'text-indigo-400/60 animate-pulse'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-xs font-mono font-black ${isOut || isStake ? 'text-white/40' : 'text-emerald-400'}`}>
+                          {isOut || isStake ? '-' : '+'}{ethers.formatUnits(tx.amount || "0", 18)}
+                        </p>
+                        <p className="text-[8px] text-white/10 font-mono tracking-tighter">#{tx.tx_hash?.slice(-8)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {history.length === 0 && (
+                  <div className="p-12 text-center">
+                    <p className="text-[10px] font-bold text-white/10 uppercase tracking-widest italic">No record found in ledger</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Console */}
             <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
               <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
@@ -981,7 +1062,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   </span>
                 </div>
               </div>
-              <div className="p-6 h-[320px] font-mono text-xs overflow-y-auto space-y-2 scrollbar-thin">
+              <div className="p-6 h-[200px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin">
                 {logs.map((log, i) => (
                   <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300' : 'text-white/30'}`}>
                     {log}
