@@ -181,7 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
         setActiveNodesCount(count || 0);
         setNetworkStats({ 
           activeNodes: count || 0, 
-          sharedPool: ethers.formatUnits(sumToday, 18)
+          sharedPool: Number(ethers.formatUnits(sumToday, 18)).toFixed(4)
         });
         
         // 4. Fetch Transaction History
@@ -223,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             
             if (legacyBalance > cloudBalance) {
               if (!hasLoggedDiscovery.current) {
-                addLog(`⚠️ Discovery: Legacy balance of ${ethers.formatUnits(legacyBalance, 18)} AUR found in old ledger.`);
+                addLog(`⚠️ Legacy Discovery: Found ${Number(ethers.formatUnits(legacyBalance, 18)).toFixed(4)} AUR.`);
                 hasLoggedDiscovery.current = true;
               }
               setLegacyPendingBalance(legacyBalance.toString());
@@ -723,7 +723,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                         setStakeAmount(ethers.formatUnits(rawAtom, 18));
                     }}
                   >
-                    Max: {ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)}
+                    Max: {Number(ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)).toFixed(4)}
                   </span>
                 </label>
                 <input 

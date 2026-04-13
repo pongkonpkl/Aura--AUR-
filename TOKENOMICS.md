@@ -1,31 +1,35 @@
-# Aura Sovereign Tokenomics (v2.0)
+# Aura Sovereign Tokenomics (v3.0) 💎🛰️
 
-Aura (AUR) is a hybrid autonomous ecosystem designed to reward both network participation (Hardware) and network security (Capital).
+Aura (AUR) is an autonomous, high-scarcity ecosystem designed to reward network security and long-term capital commitment through its **Proof of Stake (PoS)** model.
 
-## 1. Daily Mint Rate
-- **Total Rewards**: 1.0 AUR per 24-hour cycle.
-- **Distribution Frequency**: Every UTC midnight.
+## 1. Daily Mint Rate & Scarcity
+Aura is designed with extreme scarcity to ensure long-term value preservation.
+- **Total Rewards**: Exactly **1.0 AUR** is minted per 24-hour cycle.
+- **Distribution Frequency**: Every UTC midnight, the `daily-distributor` atomicaly calculates and distributes the reward.
 
-## 2. Allocation Model (The 80/20 Split)
-The network rewards hardware presence more heavily to ensure a decentralized and distributed node network.
+## 2. Distribution Model: 100% Staking Rewards
+Starting from v3.0, Aura has transitioned to a pure **Staking-First** economy. This rewards users who provide the most significant security to the protocol by locking their assets.
 
-### A. Presence Mining (80% / PoP)
-- **Target**: Users running the `Fahsai Engine` locally.
-- **Reward**: 0.8 AUR shared among all active nodes.
-- **Incentive**: Rewards users for contributing processing power and availability.
+### A. Proof of Stake (PoS)
+- **Eligibility**: Any user with a non-zero `staked_balance` in the L3 Sovereign Vault.
+- **Reward Allocation**: 100% of the daily 1.0 AUR is distributed proportionally among all stakers.
+- **The Formula**:
+  $$ Reward_{user} = \frac{Stake_{user}}{TotalStake_{global}} \times 1.0 AUR $$
 
-### B. Validator Staking (20% / PoS)
-- **Target**: Users locking AUR into the L3 Sovereign Vault.
-- **Reward**: 0.2 AUR shared among all stakers.
-- **Incentive**: Rewards users for securing the network ledger.
+### B. Fair Participation
+There are no "whales-only" tiers. Every single "wei" of AUR staked contributes to your proportional share of the daily rewards.
 
-## 3. Autonomous Survival Mode
-Aura is designed to be immortal on the "Sovereign Cloud" (GitHub).
-- **If 0 Nodes exist**: The 80% Presence Pool is automatically diverted to the **Validator Stakers**.
-- **Yield**: In survival mode, stakers earn **100% of the daily mint**.
-- **Verification**: GitHub Actions act as the decentralized validator to process transfers and stakes even when no local nodes are active.
+## 3. The 1% Burn Rule (Deflationary Mechanism)
+Every transfer or staking operation on the Aura network carries a mandatory **1% Burn Penalty**. 
+- **Deflationary Pressure**: Tokens burned are permanently removed from circulation.
+- **Scarcity Driver**: As network activity increases, the total supply of AUR naturally decreases, making each remaining token more valuable.
 
-## 4. Auto-Compounding
-All rewards are automatically deposited into your `staked_balances`.
-- **Compound Interest**: Your rewards immediately begin earning more rewards.
-- **Withdrawal**: To spend rewards, simply "Unstake" them to move them to your Liquid Treasury.
+## 4. Auto-Compounding & Liquidity
+- **Auto-Compounding**: Rewards of the day are added to your balance, which can be immediately staked to increase your share for the next day.
+- **Instant Unstaking**: Aura values sovereignty. You can unstake your assets at any time without mandatory lock-up periods, though doing so will decrease your reward share for the following cycle.
+
+## 5. Sovereign Security
+All transaction settlement and reward distribution are handled via **Atomic RPC functions** in the Sovereign Cloud, verified by ECDSA signatures, and audited on the public GitHub ledger.
+
+---
+**"Scarcity is the foundation of digital sovereignty."**
