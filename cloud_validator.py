@@ -110,16 +110,7 @@ def process_transaction(payload_src):
         signed_nonce = int(tx.get("nonce", 0))
         amount_atom = int(tx.get("amount_atom", tx.get("amount", 0)))
         
-        # 1. Signature Verification
-        if op == "transfer":
-            to_address = tx.get("to_address").lower()
-            message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
-        elif op == "sync_legacy":
-            message_str = f"SYNC_LEGACY:{amount_atom}"
-        else:
-            message_str = f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}"
-
-        if op != "sync_legacy" and signed_nonce != expected_nonce:
+        if signed_nonce != expected_nonce:
             err = f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"
             print(f"[ERROR] {err}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
@@ -138,108 +129,89 @@ def process_transaction(payload_src):
         if tx_hash_id: update_transaction_status(tx_hash_id, "failed", str(e))
         return False
 
-    # 2. Business Logic & Settlement
-    tx_hash = f"tx-{datetime.utcnow().timestamp()}"
+    # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
+    headers = get_supabase_headers()
+    rpc_success = False
     
-    if op == "transfer":
-        if current_balance < amount_atom:
-            err = "Insufficient balance"
-            print(f"[ERROR] {err}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
+    try:
+        if op == "transfer":
+            to_address = tx.get("to_address").lower()
+            rpc_payload = {
+                "p_from_address": from_address,
+                "p_to_address": to_address,
+                "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce,
+                "p_tx_hash_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
+            
+        elif op in ["stake", "unstake"]:
+            rpc_payload = {
+                "p_op": op,
+                "p_address": from_address,
+                "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce,
+                "p_tx_hash_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
+        
+        else:
+            print(f"[ERROR] Unsupported operation: {op}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
             return False
-        
-        to_address = tx.get("to_address").lower()
-        to_profile = get_profile(to_address)
-        to_balance = int(to_profile.get("balance", "0"))
-        
-        burn_penalty = max(1, amount_atom // 100) if amount_atom >= 100 else 0
-        receive_amount = amount_atom - burn_penalty
-        
-        update_supabase_profile(from_address, {"balance": str(current_balance - amount_atom), "last_nonce": signed_nonce})
-        update_supabase_profile(to_address, {"balance": str(to_balance + receive_amount)})
-        
-    elif op == "stake":
-        if current_balance < amount_atom:
-            err = "Insufficient balance"
-            print(f"[ERROR] {err}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
+
+        result = resp.json()
+        if isinstance(result, dict) and result.get("success") == True:
+            rpc_success = True
+        else:
+            error_msg = result.get("error") if isinstance(result, dict) else str(result)
+            print(f"[ERROR] RPC Failed: {error_msg}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
             return False
-        update_supabase_profile(from_address, {
-            "balance": str(current_balance - amount_atom),
-            "staked_balance": str(current_staked + amount_atom),
-            "last_nonce": signed_nonce
+
+    except Exception as e:
+        print(f"[ERROR] Database Settlement Failure: {e}")
+        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
+        return False
+
+    # 3. Synchronize Local Ledger (Audit Trail)
+    if rpc_success:
+        # Fetch updated user state for ledger consistency
+        profile = get_profile(from_address)
+        new_balance = profile.get("balance")
+        new_staked = profile.get("staked_balance")
+        new_nonce = profile.get("last_nonce")
+
+        ledger = load_json(LEDGER_FILE)
+        balances = ledger.setdefault("balances", {})
+        staked_balances = ledger.setdefault("staked_balances", {})
+        nonces = ledger.setdefault("nonces", {})
+        history = ledger.setdefault("history", [])
+
+        balances[from_address] = str(new_balance)
+        staked_balances[from_address] = str(new_staked)
+        nonces[from_address] = str(new_nonce)
+
+        if op == "transfer":
+            to_address = tx.get("to_address").lower()
+            to_profile = get_profile(to_address)
+            balances[to_address] = str(to_profile.get("balance"))
+
+        # 4. Append to Public History
+        history.insert(0, {
+            "id": tx_hash_id,
+            "event_type": op,
+            "from_address": from_address,
+            "to_address": tx.get("to_address", "System"),
+            "amount_atom": str(amount_atom),
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "cloud_validated": True
         })
+        save_json(LEDGER_FILE, ledger)
+        print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
+        return True
 
-    elif op == "unstake":
-        if current_staked < amount_atom:
-            err = "Insufficient staked balance"
-            print(f"[ERROR] {err}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
-            return False
-        update_supabase_profile(from_address, {
-            "balance": str(current_balance + amount_atom),
-            "staked_balance": str(current_staked - amount_atom),
-            "last_nonce": signed_nonce
-        })
-        
-    elif op == "sync_legacy":
-        staked_atom = int(tx.get("staked_atom", 0))
-        update_supabase_profile(from_address, {
-            "balance": str(amount_atom),
-            "staked_balance": str(staked_atom)
-        })
-        print(f"[SUCCESS] Legacy Sync completed for {from_address}")
-
-    # 3. Mark as Success in Supabase
-    if tx_hash_id:
-        update_transaction_status(tx_hash_id, "success")
-
-    # 4. Update Local Ledger State (Essential for Distributor.py logic)
-    ledger = load_json(LEDGER_FILE)
-    balances = ledger.setdefault("balances", {})
-    staked_balances = ledger.setdefault("staked_balances", {})
-    nonces = ledger.setdefault("nonces", {})
-    history = ledger.setdefault("history", [])
-
-    # Update state maps
-    if op == "transfer":
-        to_address = tx.get("to_address").lower()
-        to_profile = get_profile(to_address)
-        to_balance_after = int(to_profile.get("balance", "0")) # Already updated in Supabase in block above
-        
-        balances[from_address] = str(current_balance - amount_atom)
-        balances[to_address] = str(to_balance_after)
-        nonces[from_address] = str(signed_nonce)
-        
-    elif op == "stake":
-        balances[from_address] = str(current_balance - amount_atom)
-        staked_balances[from_address] = str(current_staked + amount_atom)
-        nonces[from_address] = str(signed_nonce)
-        
-    elif op == "unstake":
-        balances[from_address] = str(current_balance + amount_atom)
-        staked_balances[from_address] = str(current_staked - amount_atom)
-        nonces[from_address] = str(signed_nonce)
-        
-    elif op == "sync_legacy":
-        staked_atom = int(tx.get("staked_atom", 0))
-        balances[from_address] = str(amount_atom)
-        staked_balances[from_address] = str(staked_atom)
-
-    # 5. Append to History
-    history.insert(0, {
-        "id": tx_hash_id or tx_hash,
-        "event_type": op,
-        "from_address": from_address,
-        "to_address": tx.get("to_address", "System"),
-        "amount_atom": str(amount_atom),
-        "created_at": datetime.utcnow().isoformat() + "Z",
-        "cloud_validated": True
-    })
-    save_json(LEDGER_FILE, ledger)
-    
-    print(f"[SUCCESS] Settlement complete for {op}: {tx_hash_id or tx_hash}")
-    return True
+    return False
 
 if __name__ == "__main__":
     # Check if we should process the Supabase Queue

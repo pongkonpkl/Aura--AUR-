@@ -37,8 +37,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [totalEmission, setTotalEmission] = useState<string>("0");
   const [dailyEmission, setDailyEmission] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
-  const [legacyPendingBalance, setLegacyPendingBalance] = useState<string | null>(null);
-  const [isSyncingLegacy, setIsSyncingLegacy] = useState(false);
   const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
@@ -489,32 +487,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     setIsStaking(false);
   };
 
-  const handleSyncLegacy = async () => {
-    if(!legacyPendingBalance) return;
-    setIsSyncingLegacy(true);
-    try {
-        const res = await fetch(`${REPO_RAW_BASE}/ledger.json?t=${Date.now()}`);
-        const ledger = await res.json();
-        const fullLegacyLiquid = ledger.balances?.[wallet.address] || "0";
-        const fullLegacyStaked = ledger.staked_balances?.[wallet.address] || "0";
 
-        const message = `SYNC_LEGACY:${fullLegacyLiquid}`;
-        const signature = await wallet.signMessage(message);
-
-        await submitCloudTx('sync_legacy', { 
-            address: wallet.address, 
-            amount_atom: fullLegacyLiquid,
-            staked_atom: fullLegacyStaked
-        }, signature);
-
-        addLog(`Legacy Asset Recovery broadcasted. Syncing ${ethers.formatUnits(BigInt(fullLegacyLiquid) + BigInt(fullLegacyStaked), 18)} AUR...`);
-        setLegacyPendingBalance(null);
-        setLastCloudOpTime(Date.now());
-    } catch (e: any) {
-        alert("Recovery Failed: " + e.message);
-    }
-    setIsSyncingLegacy(false);
-  };
 
   return (
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
