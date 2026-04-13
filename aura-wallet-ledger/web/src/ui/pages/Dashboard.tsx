@@ -901,13 +901,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                   <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400">
                     <Globe size={24} />
                   </div>
-                  <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Global Fleet</span>
+                  <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Consensus</span>
                 </div>
                 <div className="space-y-1">
                   <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-blue-400 transition-colors">
                     {networkStats.activeNodes}
                   </p>
-                  <p className="text-sm text-white/30 font-medium whitespace-nowrap">Verified Peer Node Connections</p>
+                  <p className="text-sm text-white/30 font-medium whitespace-nowrap">Active Network Validators</p>
                 </div>
               </div>
 
@@ -982,7 +982,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
                     <div className="p-3 bg-white/10 rounded-xl text-white relative">
-                      <div className="pulse-ring" />
                       <Activity size={24} className="relative z-10" />
                     </div>
                     <span className="text-sm font-bold text-white uppercase tracking-widest">Network Health Pulse</span>
