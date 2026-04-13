@@ -42,8 +42,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
   const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
+  const [recipientProfile, setRecipientProfile] = useState<{nick?: string, exists: boolean} | null>(null);
+  const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
 
-  const isValidAddress = recipient ? ethers.isAddress(recipient) : null;
+  const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
 
   const hasLoggedRegistration = useRef(false);
@@ -301,6 +303,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
     return () => clearInterval(interval);
   }, [pendingTxs]);
 
+  // 🛡️ Smart Identity Verification Loop
+  useEffect(() => {
+    if (!recipient || !isValidAddress) {
+      setRecipientProfile(null);
+      return;
+    }
+
+    const checkIdentity = async () => {
+      setIsCheckingRecipient(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('wallet_address', recipient.toLowerCase())
+          .single();
+
+        if (data) {
+          setRecipientProfile({ nick: data.nickname, exists: true });
+        } else {
+          setRecipientProfile({ exists: false });
+        }
+      } catch (err) {
+        setRecipientProfile(null);
+      }
+      setIsCheckingRecipient(false);
+    };
+
+    const debounceToken = setTimeout(checkIdentity, 500);
+    return () => clearTimeout(debounceToken);
+  }, [recipient, isValidAddress]);
+
   const fetchNonce = async (address: string): Promise<number> => {
     try {
       // Security Hardening: Prioritize Database-driven Nonce
@@ -551,6 +584,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     Invalid Sovereign Address Format or Checksum Error
                   </p>
                 )}
+                {isValidAddress === true && isCheckingRecipient && (
+                  <p className="text-[10px] font-bold text-indigo-400 mt-2 uppercase tracking-tighter animate-pulse">
+                    🔍 Verifying Identity in Aura Universe...
+                  </p>
+                )}
+                {isValidAddress === true && !isCheckingRecipient && recipientProfile?.exists && (
+                  <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase tracking-tighter flex items-center gap-1 animate-in zoom-in duration-300">
+                    <CheckCircle2 size={12} /> Verified AUR Resident {recipientProfile.nick ? `(${recipientProfile.nick})` : ''}
+                  </p>
+                )}
+                {isValidAddress === true && !isCheckingRecipient && recipientProfile && !recipientProfile.exists && (
+                  <p className="text-[10px] font-bold text-amber-500 mt-2 uppercase tracking-tighter flex items-center gap-1 animate-in slide-in-from-left-2">
+                    ⚠️ New Sovereign Address (No History Detected)
+                  </p>
+                )}
                 {isValidAddress === true && isSelfSend && (
                   <p className="text-[10px] font-bold text-orange-400 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
                     ⚠️ Warning: You are sending AUR to your own Sovereign Identity
@@ -595,7 +643,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
 
               <div>
                 <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Amount (AUR)</label>
-                <input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} type="number" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-bold" />
+                <input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} type="number" step="any" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-bold" />
               </div>
               <button disabled={isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
                 {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
@@ -708,7 +756,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                 <input 
                   value={stakeAmount} 
                   onChange={e=>setStakeAmount(e.target.value)} 
-                  type="text" 
+                  type="number" 
+                  step="any"
                   placeholder="0.00" 
                   className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none transition-all font-mono font-bold ${stakingTab === 'stake' ? 'focus:border-emerald-500' : 'focus:border-orange-500'}`} 
                 />
