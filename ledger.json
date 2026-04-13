@@ -29,6 +29,16 @@
   },
   "history": [
     {
+      "id": "0161abc4-f675-4c65-a2c9-a4d2b914a294",
+      "tx_hash": "queued-1776103729731-ofuypn",
+      "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
+      "to_address": "0x0aa81e8daf1ef9e9a2a62b043bfe9323b71bf253",
+      "amount_atom": 10000000000000000,
+      "tx_type": "transfer",
+      "created_at": "2026-04-13T18:08:49.451713+00:00",
+      "cloud_validated": true
+    },
+    {
       "id": "1241bab9-670f-4b48-9cb5-e5887574cf90",
       "tx_hash": "queued-1776103688975-8rvky",
       "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
