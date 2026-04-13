@@ -369,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
       
-      const message = `AUR_TX:${nextNonce}:${wallet.address}:${recipient}:${amountAtom}`;
+      const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom}`;
       const signature = await wallet.signMessage(message);
       
       // All transactions now go through Aura Cloud (Supabase/GitHub)
@@ -406,7 +406,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `AUR_STAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
+      const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
@@ -436,7 +436,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address}:${amountAtom.toString()}`;
+      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);

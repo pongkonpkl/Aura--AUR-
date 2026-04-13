@@ -194,9 +194,39 @@ def process_transaction(payload_src):
     if tx_hash_id:
         update_transaction_status(tx_hash_id, "success")
 
-    # 4. Append to Local Ledger (Permanent Hub/GitHub Ledger)
+    # 4. Update Local Ledger State (Essential for Distributor.py logic)
     ledger = load_json(LEDGER_FILE)
+    balances = ledger.setdefault("balances", {})
+    staked_balances = ledger.setdefault("staked_balances", {})
+    nonces = ledger.setdefault("nonces", {})
     history = ledger.setdefault("history", [])
+
+    # Update state maps
+    if op == "transfer":
+        to_address = tx.get("to_address").lower()
+        to_profile = get_profile(to_address)
+        to_balance_after = int(to_profile.get("balance", "0")) # Already updated in Supabase in block above
+        
+        balances[from_address] = str(current_balance - amount_atom)
+        balances[to_address] = str(to_balance_after)
+        nonces[from_address] = str(signed_nonce)
+        
+    elif op == "stake":
+        balances[from_address] = str(current_balance - amount_atom)
+        staked_balances[from_address] = str(current_staked + amount_atom)
+        nonces[from_address] = str(signed_nonce)
+        
+    elif op == "unstake":
+        balances[from_address] = str(current_balance + amount_atom)
+        staked_balances[from_address] = str(current_staked - amount_atom)
+        nonces[from_address] = str(signed_nonce)
+        
+    elif op == "sync_legacy":
+        staked_atom = int(tx.get("staked_atom", 0))
+        balances[from_address] = str(amount_atom)
+        staked_balances[from_address] = str(staked_atom)
+
+    # 5. Append to History
     history.insert(0, {
         "id": tx_hash_id or tx_hash,
         "event_type": op,
