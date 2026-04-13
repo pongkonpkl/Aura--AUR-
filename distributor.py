@@ -138,8 +138,5 @@ def distribute():
 
     print(f"[SUCCESS] Global rewards distributed.")
 
-    else:
-        print("[WARNING] No active nodes or stakers found.")
-
 if __name__ == "__main__":
     distribute()
