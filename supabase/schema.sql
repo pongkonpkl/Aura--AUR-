@@ -13,6 +13,19 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 1b. Validators: Real-time Voting Power
+CREATE TABLE IF NOT EXISTS validators (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    wallet_address TEXT UNIQUE NOT NULL REFERENCES profiles(wallet_address),
+    voting_power NUMERIC DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_validators_voting_power ON validators(voting_power DESC);
+
 -- Index for wallet lookups
 CREATE INDEX IF NOT EXISTS idx_profiles_wallet_address ON profiles(wallet_address);
 
@@ -29,6 +42,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     signature TEXT,
     payload JSONB, -- Stores the full request for the validator
     error_log TEXT, -- Stores failure reasons
+    synced_to_github BOOLEAN DEFAULT false, -- Public Ledger Sync Flag
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -59,6 +73,14 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mining_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE distributions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE validators ENABLE ROW LEVEL SECURITY;
+
+-- Policies for Validators
+CREATE POLICY "Validators are viewable by everyone" ON validators
+    FOR SELECT USING (true);
+
+CREATE POLICY "Service Role has full access to validators" ON validators
+    FOR ALL USING (auth.role() = 'service_role');
 
 -- Policies for Profiles
 CREATE POLICY "Profiles are viewable by everyone" ON profiles

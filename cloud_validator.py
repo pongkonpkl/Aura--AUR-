@@ -129,109 +129,68 @@ def process_transaction(payload_src):
         if tx_hash_id: update_transaction_status(tx_hash_id, "failed", str(e))
         return False
 
-    # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
-    headers = get_supabase_headers()
-    rpc_success = False
-    
-    try:
-        if op == "transfer":
-            to_address = tx.get("to_address").lower()
-            rpc_payload = {
-                "p_from_address": from_address,
-                "p_to_address": to_address,
-                "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce,
-                "p_tx_hash_id": tx_hash_id
-            }
-            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
-            
-        elif op in ["stake", "unstake"]:
-            rpc_payload = {
-                "p_op": op,
-                "p_address": from_address,
-                "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce,
-                "p_tx_hash_id": tx_hash_id
-            }
-            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
+        # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
+        headers = get_supabase_headers()
         
-        else:
-            print(f"[ERROR] Unsupported operation: {op}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
+        try:
+            if op == "transfer":
+                to_address = tx.get("to_address").lower()
+                rpc_payload = {
+                    "p_from_address": from_address,
+                    "p_to_address": to_address,
+                    "p_amount_atom": amount_atom,
+                    "p_nonce": signed_nonce,
+                    "p_tx_hash_id": tx_hash_id
+                }
+                resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
+                
+            elif op in ["stake", "unstake"]:
+                rpc_payload = {
+                    "p_op": op,
+                    "p_address": from_address,
+                    "p_amount_atom": amount_atom,
+                    "p_nonce": signed_nonce,
+                    "p_tx_hash_id": tx_hash_id
+                }
+                resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
+            
+            else:
+                print(f"[ERROR] Unsupported operation: {op}")
+                if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
+                return False
+
+            result = resp.json()
+            if isinstance(result, dict) and result.get("success") == True:
+                print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
+                # Note: GitHub Sync is now handled by Supabase Edge Function (Webhooks)
+                return True
+            else:
+                error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                print(f"[ERROR] RPC Failed: {error_msg}")
+                if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
+                return False
+
+        except Exception as e:
+            print(f"[ERROR] Database Settlement Failure: {e}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
             return False
-
-        result = resp.json()
-        if isinstance(result, dict) and result.get("success") == True:
-            rpc_success = True
-        else:
-            error_msg = result.get("error") if isinstance(result, dict) else str(result)
-            print(f"[ERROR] RPC Failed: {error_msg}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
-            return False
-
-    except Exception as e:
-        print(f"[ERROR] Database Settlement Failure: {e}")
-        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
-        return False
-
-    # 3. Synchronize Local Ledger (Audit Trail)
-    if rpc_success:
-        # Fetch updated user state for ledger consistency
-        profile = get_profile(from_address)
-        new_balance = profile.get("balance")
-        new_staked = profile.get("staked_balance")
-        new_nonce = profile.get("last_nonce")
-
-        ledger = load_json(LEDGER_FILE)
-        balances = ledger.setdefault("balances", {})
-        staked_balances = ledger.setdefault("staked_balances", {})
-        nonces = ledger.setdefault("nonces", {})
-        history = ledger.setdefault("history", [])
-
-        balances[from_address] = str(new_balance)
-        staked_balances[from_address] = str(new_staked)
-        nonces[from_address] = str(new_nonce)
-
-        if op == "transfer":
-            to_address = tx.get("to_address").lower()
-            to_profile = get_profile(to_address)
-            balances[to_address] = str(to_profile.get("balance"))
-
-        # 4. Append to Public History
-        history.insert(0, {
-            "id": tx_hash_id,
-            "event_type": op,
-            "from_address": from_address,
-            "to_address": tx.get("to_address", "System"),
-            "amount_atom": str(amount_atom),
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "cloud_validated": True
-        })
-        save_json(LEDGER_FILE, ledger)
-        print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
-        return True
 
     return False
 
 if __name__ == "__main__":
-    # Check if we should process the Supabase Queue
     if os.environ.get("PROCESS_QUEUE") == "true":
-        print("[INFO] Aura Cloud: Processing Transaction Queue...")
+        print("[INFO] Aura Cloud Validator: Processing Queue...")
         try:
             pending_txs = fetch_pending_transactions()
             if not pending_txs:
                 print("[INFO] No pending transactions.")
             for tx_record in pending_txs:
-                print(f"[INFO] Processing {tx_record.get('tx_hash')}...")
                 process_transaction(tx_record)
         except Exception as e:
             print(f"[ERROR] Queue processing failed: {e}")
     else:
-        # Legacy CLI mode
-        payload_input = os.environ.get("CLIENT_PAYLOAD")
-        if not payload_input:
-            if len(sys.argv) < 2:
-                print("[ERROR] No payload provided and PROCESS_QUEUE is not true.")
-                sys.exit(1)
-            payload_input = sys.argv[1]
-        process_transaction(payload_input)
+        payload_input = os.environ.get("CLIENT_PAYLOAD") or (sys.argv[1] if len(sys.argv) > 1 else None)
+        if payload_input:
+            process_transaction(payload_input)
+        else:
+            print("[ERROR] No input provided.")
