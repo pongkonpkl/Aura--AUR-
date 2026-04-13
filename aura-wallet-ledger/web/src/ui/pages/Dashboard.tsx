@@ -877,16 +877,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
               </button>
             </div>
 
-            {legacyPendingBalance && (
-              <button 
-                onClick={handleSyncLegacy}
-                disabled={isSyncingLegacy}
-                className={`px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-emerald-400/30 hover:bg-emerald-400 hover:scale-105 ${isSyncingLegacy ? 'opacity-50' : ''}`}
-              >
-                <RefreshCw size={14} className={isSyncingLegacy ? 'animate-spin' : ''} /> 
-                <span>{isSyncingLegacy ? 'Syncing...' : 'Sync Old Assets'}</span>
-              </button>
-            )}
+
             
             <button 
               onClick={onLogout}
