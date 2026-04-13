@@ -17,6 +17,12 @@ const App: React.FC = () => {
     setView('landing');
   };
 
+  const handleDisconnect = () => {
+    localStorage.removeItem('aura_identity_v2');
+    setWallet(null);
+    setView('landing');
+  };
+
   return (
     <div className="min-h-screen">
       <div className="celestial-bg" />
@@ -24,7 +30,11 @@ const App: React.FC = () => {
       {view === 'landing' || !wallet ? (
         <LandingPage onLaunch={handleLaunch} />
       ) : (
-        <Dashboard onLogout={handleLogout} wallet={wallet} />
+        <Dashboard 
+          onLogout={handleLogout} 
+          onDisconnect={handleDisconnect}
+          wallet={wallet} 
+        />
       )}
     </div>
   );

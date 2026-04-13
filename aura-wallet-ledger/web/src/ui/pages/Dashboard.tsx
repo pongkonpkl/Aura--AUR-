@@ -13,10 +13,11 @@ import { supabase } from '../../lib/supabase';
 
 interface DashboardProps {
   onLogout: () => void;
+  onDisconnect: () => void;
   wallet: ethers.Wallet;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
   const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | null>(null);
@@ -1148,7 +1149,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
             </div>
 
             <button 
-              onClick={onLogout}
+              onClick={() => {
+                if (window.confirm("CAUTION: Disconnecting will WIPE your identity from this device. You will need your 12-word Seed Phrase to return. Continue?")) {
+                  onDisconnect();
+                }
+              }}
               className="w-full py-4 text-xs font-bold text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all uppercase tracking-widest border border-red-500/10 rounded-2xl shadow-lg"
             >
               Disconnect Node
