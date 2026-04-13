@@ -701,13 +701,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                  <p className="text-sm text-white/70">
                    {stakingTab === 'stake' ? (
                      <>
-                        <strong className="text-emerald-400 block mb-1">Earn 80% of Daily AUR Protocol Yield</strong>
-                        Lock your Aura into the L3 Smart Contract. You can withdraw anytime. Minimum stake is 1 wei.
+                        <strong className="text-emerald-400 block mb-1">Earn 100% of Daily AUR Protocol Yield</strong>
+                        Lock your Aura into the Sovereign Vault. You can withdraw anytime. Minimum stake is 1 wei.
                      </>
                    ) : (
                      <>
                         <strong className="text-orange-400 block mb-1">Unlock Sovereign Capital</strong>
-                        Move your AUR from the L3 Vault back to your Celestial Treasury. There is zero exit fee.
+                        Move your AUR from the Sovereign Vault back to your Celestial Treasury. There is zero exit fee.
                      </>
                    )}
                  </p>
@@ -956,14 +956,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                     </div>
                     <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Stake</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20">L3 Vault</span>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20">Sovereign Vault</span>
                 </div>
                 <div className="space-y-1 mb-8">
                   <p className="text-5xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
                     {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-2xl text-emerald-400/40"> AUR</span>
                   </p>
                   <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
-                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Validator Reward: 20% Yield)
+                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Protocol Distribution: 100% Yield)
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -985,13 +985,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, wallet }) => {
                       <div className="pulse-ring" />
                       <Activity size={24} className="relative z-10" />
                     </div>
-                    <span className="text-sm font-bold text-white uppercase tracking-widest">Presence Drop</span>
+                    <span className="text-sm font-bold text-white uppercase tracking-widest">Network Health Pulse</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-white/10 text-white rounded-md">PoP Claim</span>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-white/10 text-white rounded-md">Sovereign Witness</span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xl font-bold">Autonomous Airdrop</p>
-                  <p className="text-sm text-indigo-300 font-medium">Autonomous Presence (80% Base Yield)</p>
+                  <p className="text-xl font-bold">Staking Performance</p>
+                  <p className="text-sm text-indigo-300 font-medium">Sovereign Staking (100% Fixed Yield)</p>
                 </div>
               </div>
 
