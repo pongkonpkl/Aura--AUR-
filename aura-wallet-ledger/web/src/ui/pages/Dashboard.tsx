@@ -597,32 +597,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     wrapWithChallenge(action);
   };
 
-  const addAurToMetaMask = async () => {
-    if (!(window as any).ethereum) {
-      addLog("❌ MetaMask not detected. Please install the extension.");
-      return;
-    }
-    try {
-      addLog("Pushing AUR Asset Configuration to MetaMask...");
-      const wasAdded = await (window as any).ethereum.request({
-        method: 'wallet_watchAsset',
-        params: {
-          type: 'ERC20',
-          options: {
-            address: '0x1719a50eeC8F15BC12A7955E5E98Cd46b324f05b',
-            symbol: 'AUR',
-            decimals: 18,
-            image: 'https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1/logo.png',
-          },
-        },
-      });
-      if (wasAdded) {
-        addLog("✅ AUR successfully registered in your MetaMask.");
-      }
-    } catch (error) {
-      addLog("❌ MetaMask registration failed or cancelled.");
-    }
-  };
 
   const handleWithdraw = async () => {
     if (BigInt(balanceAtom) <= 0n) {
@@ -1207,15 +1181,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     <ArrowDownLeft size={18} /> Receive
                   </button>
                 </div>
-                {/* NEW: Withdraw to MetaMask Button */}
-                <button 
-                  onClick={handleWithdraw}
-                  disabled={BigInt(balanceAtom) <= 0n || isClaiming}
-                  className="w-full mt-4 py-4 bg-emerald-500/10 text-emerald-400 font-black text-[11px] uppercase rounded-2xl border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-3 group"
-                >
-                  {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} className="group-hover:animate-pulse" />}
-                  Withdraw to MetaMask Wallet
-                </button>
               </div>
 
               {/* Sovereign Staking (PoS) */}
@@ -1555,26 +1520,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               </div>
             </div>
 
-            {/* MetaMask Bridge Asset */}
-            <div className="glass-panel p-6 rounded-3xl bg-orange-500/5 border-orange-500/20 shadow-[0_0_30px_rgba(249,115,22,0.1)] relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/5 blur-3xl rounded-full" />
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 bg-orange-500/10 rounded-xl">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" className="w-5 h-5" />
-                </div>
-                <h3 className="text-[11px] font-black text-white/60 uppercase tracking-widest">Sovereign Bridge</h3>
-              </div>
-              <p className="text-[10px] text-white/40 leading-relaxed mb-6">
-                Connect <span className="text-orange-400 font-bold">MetaMask</span> to Aura. This automatically imports the AUR token address.
-              </p>
-              <button 
-                onClick={addAurToMetaMask}
-                className="w-full py-4 bg-orange-500 text-white font-black text-[10px] uppercase rounded-xl hover:bg-orange-400 transition-all shadow-[0_10px_20px_rgba(249,115,22,0.2)] active:scale-95 flex items-center justify-center gap-3"
-              >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" className="w-4 h-4" />
-                Add AUR to MetaMask
-              </button>
-            </div>
 
             <div className="glass-panel p-8 rounded-3xl bg-indigo-500/5 glow-border relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
