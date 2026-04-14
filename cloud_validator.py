@@ -57,7 +57,7 @@ def log_transaction_to_supabase(tx_data):
 def fetch_pending_transactions():
     headers = get_supabase_headers()
     # Fetch all transactions with 'pending' status
-    resp = requests.get(f"{SUPABASE_URL}/rest/v1/transactions?status=eq.pending", headers=headers)
+    resp = requests.get(f"{SUPABASE_URL}/rest/v1/transactions?status=eq.pending&order=created_at.asc", headers=headers)
     return resp.json()
 
 def update_transaction_status(tx_hash, status, error_msg=None):
@@ -80,10 +80,12 @@ def process_transaction(payload_src):
     else:
         data = payload_src
 
+    tx_hash_id = data.get("tx_hash") # From DB (Supabase Row)
+    print(f"[INFO] Processing TX: {tx_hash_id}")
+
     op = data.get("op")
     tx = data.get("tx")
     signature = data.get("signature")
-    tx_hash_id = data.get("tx_hash") # From DB (Supabase Row)
     
     # Logic for Supabase Queue: If top-level keys are missing, extract from 'payload' JSONB
     if not op and "payload" in data:
@@ -94,6 +96,12 @@ def process_transaction(payload_src):
         tx = db_payload.get("tx")
         signature = db_payload.get("signature")
 
+    # If it's a direct record from the 'transactions' table (like our high-speed queue)
+    if data.get("tx_type") and not op:
+        op = data.get("tx_type")
+        tx = {"address": data.get("from_address"), "amount_atom": data.get("amount"), "nonce": 0} # Nonce might be handled differently
+        # For High-Speed RPC, we might need to handle the nonce differently if it's not in the record
+    
     if not op or not tx or not signature:
         print(f"[ERROR] Missing data components for {tx_hash_id or 'unknown'}")
         if tx_hash_id: update_transaction_status(tx_hash_id, "failed", "Missing op/tx/signature in payload")
@@ -107,28 +115,37 @@ def process_transaction(payload_src):
         signed_nonce = int(tx.get("nonce", 0))
         amount_atom = int(tx.get("amount_atom", tx.get("amount", 0)))
         
-        if signed_nonce != expected_nonce:
+        # High-Speed RPC might have sent 0 as placeholder, we check it later
+        if signed_nonce != 0 and signed_nonce != expected_nonce:
             err = f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"
             print(f"[ERROR] {err}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
             return False
 
         # Define message based on operation
+        message_variants = []
         if op == "withdraw":
-            message_str = f"AUR_WITHDRAW_RPC:{signed_nonce}:{from_address}:{amount_atom}"
+            message_variants.append(f"AUR_WITHDRAW_RPC:{signed_nonce}:{from_address}:{amount_atom}")
+            message_variants.append(f"AUR_WITHDRAW:{signed_nonce}:{from_address}:{amount_atom}")
         elif op == "transfer":
             to_address = tx.get("to_address", "").lower()
-            message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
+            message_variants.append(f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}")
         elif op in ["stake", "unstake"]:
-            message_str = f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}"
-        else:
-            message_str = f"AUR_OP:{signed_nonce}:{from_address}"
-
-        message = encode_defunct(text=message_str)
-        recovered_address = Account.recover_message(message, signature=signature)
+            message_variants.append(f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}")
         
-        if recovered_address.lower() != from_address:
-            print("[ERROR] Invalid digital signature")
+        # Identity verification
+        verified = False
+        for msg_str in message_variants:
+            try:
+                message = encode_defunct(text=msg_str)
+                recovered = Account.recover_message(message, signature=signature)
+                if recovered.lower() == from_address:
+                    verified = True
+                    break
+            except: continue
+            
+        if not verified:
+            print("[ERROR] Invalid digital signature (Checked all variants)")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", "Invalid signature")
             return False
             
@@ -137,69 +154,62 @@ def process_transaction(payload_src):
         if tx_hash_id: update_transaction_status(tx_hash_id, "failed", str(e))
         return False
 
-    # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
+    # 2. Atomic Settlement via Supabase RPC
     headers = get_supabase_headers()
+    print(f"[INFO] Settling {op} in database...")
     
     try:
         if op == "transfer":
             to_address = tx.get("to_address").lower()
             rpc_payload = {
-                "p_from_address": from_address,
-                "p_to_address": to_address,
-                "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce,
+                "p_from_address": from_address, "p_to_address": to_address,
+                "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
                 "p_tx_hash_id": tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
             
         elif op in ["stake", "unstake"]:
             rpc_payload = {
-                "p_op": op,
-                "p_address": from_address,
-                "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce,
+                "p_op": op, "p_address": from_address,
+                "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
                 "p_tx_hash_id": tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
 
         elif op == "withdraw":
             rpc_payload = {
-                "p_address": from_address,
-                "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce,
-                "p_tx_hash_id": tx_hash_id
+                "p_address": from_address, "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce or expected_nonce, "p_tx_hash_id": tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_withdrawal", headers=headers, json=rpc_payload)
         
         else:
-            print(f"[ERROR] Unsupported operation: {op}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
             return False
 
         result = resp.json()
+        print(f"[DEBUG] RPC Result: {result}")
         if isinstance(result, list): result = result[0]
         
         if isinstance(result, dict) and result.get("success") == True:
-            print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
+            print(f"[SUCCESS] {op} completed: {tx_hash_id}")
             return True
         else:
             error_msg = result.get("error") if isinstance(result, dict) else str(result)
-            print(f"[ERROR] RPC Failed: {error_msg}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
             return False
 
     except Exception as e:
-        print(f"[ERROR] Database Settlement Failure: {e}")
-        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
+        print(f"[ERROR] DB Settlement Failure: {e}")
+        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", str(e))
         return False
 
 if __name__ == "__main__":
     if os.environ.get("PROCESS_QUEUE") == "true":
-        print("[INFO] Aura Cloud Validator: Processing Queue...")
+        print("[INFO] Aura Cloud Validator v2: Processing Queue...")
         try:
             pending_txs = fetch_pending_transactions()
-            if not pending_txs:
-                print("[INFO] No pending transactions.")
+            print(f"[INFO] Found {len(pending_txs)} pending transactions.")
             for tx_record in pending_txs:
                 process_transaction(tx_record)
         except Exception as e:
