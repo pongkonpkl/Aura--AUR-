@@ -1,9 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
-  Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
-  X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2, Lock, Zap
+  Copy, Scan, Camera, Maximize2, Lock, Zap, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
@@ -59,6 +54,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [buyOrderQuantity, setBuyOrderQuantity] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
+  const [isMarketExpanded, setIsMarketExpanded] = useState(false);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
@@ -1319,7 +1316,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
             {/* Sovereign Marketplace (P2P Exchange) */}
             <div className="glass-panel rounded-3xl overflow-hidden border-indigo-500/10">
-              <div className="bg-indigo-500/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <div 
+                className="bg-indigo-500/10 px-6 py-4 flex items-center justify-between border-b border-white/5 cursor-pointer hover:bg-indigo-500/20 transition-all select-none"
+                onClick={() => setIsMarketExpanded(!isMarketExpanded)}
+              >
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <Globe size={16} className="text-indigo-400" />
@@ -1328,17 +1328,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Marketplace</span>
                   <span className="text-[10px] font-black text-emerald-400/60 uppercase tracking-tighter bg-emerald-500/10 px-2 py-0.5 rounded">Live Sync Active</span>
                 </div>
-                <button 
-                  onClick={fetchOrders}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all flex items-center gap-2"
-                >
-                  <span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Refresh Nebula</span>
-                  <RefreshCw size={12} className={isMarketLoading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); fetchOrders(); }}
+                    className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all flex items-center gap-2"
+                  >
+                    <span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Refresh Nebula</span>
+                    <RefreshCw size={12} className={isMarketLoading ? 'animate-spin' : ''} />
+                  </button>
+                  {isMarketExpanded ? <ChevronUp size={16} className="text-white/20" /> : <ChevronDown size={16} className="text-white/20" />}
+                </div>
               </div>
 
-              <div className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              {isMarketExpanded && (
+                <div className="p-8 animate-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div className="flex justify-between items-end">
                       <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Buy Orders</h4>
@@ -1447,28 +1451,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                    </p>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Console */}
             <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
-              <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <div 
+                className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5 cursor-pointer hover:bg-white/10 transition-all select-none"
+                onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
+              >
                 <div className="flex items-center gap-3">
                   <TerminalIcon size={16} className="text-indigo-400" />
                   <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
                 </div>
-                <div className="flex gap-4">
-                  <span className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
+                <div className="flex gap-4 items-center">
+                  <span className="text-[10px] text-white/20 uppercase tracking-widest hidden md:flex items-center gap-1">
                     <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2EE Secure
                   </span>
+                  {isConsoleExpanded ? <ChevronUp size={16} className="text-white/20" /> : <ChevronDown size={16} className="text-white/20" />}
                 </div>
               </div>
-              <div className="p-6 h-[200px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin">
-                {logs.map((log, i) => (
-                  <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300' : 'text-white/30'}`}>
-                    {log}
-                  </div>
-                ))}
-              </div>
+              {isConsoleExpanded && (
+                <div className="p-6 h-[200px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin animate-in slide-in-from-top-2 duration-300">
+                  {logs.map((log, i) => (
+                    <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300' : 'text-white/30'}`}>
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
