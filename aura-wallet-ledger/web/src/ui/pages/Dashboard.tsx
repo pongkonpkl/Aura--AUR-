@@ -1,3 +1,8 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
+  Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
+  X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
   Copy, Scan, Camera, Maximize2, Lock, Zap, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { ethers } from 'ethers';
