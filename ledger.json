@@ -33,6 +33,16 @@
   },
   "history": [
     {
+      "id": "430669c4-a8f9-4e73-821c-7f1cc4aca01e",
+      "tx_hash": "wd-1776186230.439979",
+      "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
+      "to_address": "Sovereign Bridge",
+      "amount_atom": 109757142857142860,
+      "tx_type": "withdraw",
+      "created_at": "2026-04-14T17:03:50.439979+00:00",
+      "cloud_validated": true
+    },
+    {
       "id": "811baaf9-8663-4194-8acc-1b18f2b49484",
       "tx_hash": "queued-1776182675992-dvm41i",
       "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
