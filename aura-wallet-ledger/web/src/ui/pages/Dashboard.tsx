@@ -630,35 +630,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       return;
     }
     const action = async () => {
-      setIsClaiming(true); // Re-use isClaiming or create isWithdrawing
+      setIsClaiming(true);
       try {
-        addLog(`Initiating Withdrawal of ${ethers.formatUnits(balanceAtom, 18)} AUR to MetaMask...`);
+        addLog(`Pushing Withdrawal Signal to Supabase High-Speed Queue...`);
         
-        // Safety: In this version, we trigger a mint to the user's address from the cloud validator
         const currentNonce = await fetchNonce(wallet.address);
         const nextNonce = currentNonce + 1;
-        const message = `AUR_WITHDRAW:${nextNonce}:${wallet.address.toLowerCase()}:${balanceAtom}`;
+        const message = `AUR_WITHDRAW_RPC:${nextNonce}:${wallet.address.toLowerCase()}:${balanceAtom}`;
         const signature = await wallet.signMessage(message);
 
-        // Send to Cloud Validator via local engine
-        const resp = await fetch(`${LOCAL_ENGINE_URL}/withdraw-op`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                tx: { address: wallet.address, amount_atom: balanceAtom, nonce: nextNonce }, 
-                signature 
-            })
+        // High-Speed RPC Call to Supabase
+        const { error } = await supabase.rpc('queue_withdrawal', {
+            user_wallet: wallet.address.toLowerCase(),
+            amount_val: balanceAtom,
+            sig: signature
         });
 
-        const result = await resp.json();
-        if (result.ok) {
-           addLog(`✅ Withdrawal Successful. AUR is moving to your MetaMask.`);
-           setBalanceAtom("0"); // Clear cloud balance
-        } else {
-           throw new Error(result.error || "Withdrawal failed");
-        }
+        if (error) throw error;
+
+        // Optimistic UI Update: Make it feel instant
+        const withdrawnAmount = ethers.formatUnits(balanceAtom, 18);
+        setBalanceAtom("0");
+        addLog(`✅ Signal Sent! ${withdrawnAmount} AUR is being bridged to your MetaMask via Cloud Validator.`);
+        setLastCloudOpTime(Date.now());
+        
       } catch (e: any) {
-        addLog(`❌ Withdrawal Error: ${e.message}`);
+        addLog(`❌ High-Speed Queue Error: ${e.message}`);
       }
       setIsClaiming(false);
     };
