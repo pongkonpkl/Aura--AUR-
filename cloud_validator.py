@@ -103,10 +103,7 @@ def process_transaction(payload_src):
         from_address = (tx.get("from_address") or tx.get("address")).lower()
         profile = get_profile(from_address)
         
-        current_balance = int(profile.get("balance", "0"))
-        current_staked = int(profile.get("staked_balance", "0"))
         expected_nonce = int(profile.get("last_nonce", 0)) + 1
-        
         signed_nonce = int(tx.get("nonce", 0))
         amount_atom = int(tx.get("amount_atom", tx.get("amount", 0)))
         
@@ -115,6 +112,17 @@ def process_transaction(payload_src):
             print(f"[ERROR] {err}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
             return False
+
+        # Define message based on operation
+        if op == "withdraw":
+            message_str = f"AUR_WITHDRAW_RPC:{signed_nonce}:{from_address}:{amount_atom}"
+        elif op == "transfer":
+            to_address = tx.get("to_address", "").lower()
+            message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
+        elif op in ["stake", "unstake"]:
+            message_str = f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}"
+        else:
+            message_str = f"AUR_OP:{signed_nonce}:{from_address}"
 
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
@@ -129,53 +137,61 @@ def process_transaction(payload_src):
         if tx_hash_id: update_transaction_status(tx_hash_id, "failed", str(e))
         return False
 
-        # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
-        headers = get_supabase_headers()
-        
-        try:
-            if op == "transfer":
-                to_address = tx.get("to_address").lower()
-                rpc_payload = {
-                    "p_from_address": from_address,
-                    "p_to_address": to_address,
-                    "p_amount_atom": amount_atom,
-                    "p_nonce": signed_nonce,
-                    "p_tx_hash_id": tx_hash_id
-                }
-                resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
-                
-            elif op in ["stake", "unstake"]:
-                rpc_payload = {
-                    "p_op": op,
-                    "p_address": from_address,
-                    "p_amount_atom": amount_atom,
-                    "p_nonce": signed_nonce,
-                    "p_tx_hash_id": tx_hash_id
-                }
-                resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
+    # 2. Atomic Settlement via Supabase RPC (Prevents Race Conditions)
+    headers = get_supabase_headers()
+    
+    try:
+        if op == "transfer":
+            to_address = tx.get("to_address").lower()
+            rpc_payload = {
+                "p_from_address": from_address,
+                "p_to_address": to_address,
+                "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce,
+                "p_tx_hash_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
             
-            else:
-                print(f"[ERROR] Unsupported operation: {op}")
-                if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
-                return False
+        elif op in ["stake", "unstake"]:
+            rpc_payload = {
+                "p_op": op,
+                "p_address": from_address,
+                "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce,
+                "p_tx_hash_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
 
-            result = resp.json()
-            if isinstance(result, dict) and result.get("success") == True:
-                print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
-                # Note: GitHub Sync is now handled by Supabase Edge Function (Webhooks)
-                return True
-            else:
-                error_msg = result.get("error") if isinstance(result, dict) else str(result)
-                print(f"[ERROR] RPC Failed: {error_msg}")
-                if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
-                return False
-
-        except Exception as e:
-            print(f"[ERROR] Database Settlement Failure: {e}")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
+        elif op == "withdraw":
+            rpc_payload = {
+                "p_address": from_address,
+                "p_amount_atom": amount_atom,
+                "p_nonce": signed_nonce,
+                "p_tx_hash_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_withdrawal", headers=headers, json=rpc_payload)
+        
+        else:
+            print(f"[ERROR] Unsupported operation: {op}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
             return False
 
-    return False
+        result = resp.json()
+        if isinstance(result, list): result = result[0]
+        
+        if isinstance(result, dict) and result.get("success") == True:
+            print(f"[SUCCESS] Atomic Settlement complete for {op}: {tx_hash_id}")
+            return True
+        else:
+            error_msg = result.get("error") if isinstance(result, dict) else str(result)
+            print(f"[ERROR] RPC Failed: {error_msg}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", error_msg)
+            return False
+
+    except Exception as e:
+        print(f"[ERROR] Database Settlement Failure: {e}")
+        if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"DB Error: {e}")
+        return False
 
 if __name__ == "__main__":
     if os.environ.get("PROCESS_QUEUE") == "true":
