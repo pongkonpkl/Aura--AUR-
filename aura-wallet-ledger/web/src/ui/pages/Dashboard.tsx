@@ -20,7 +20,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | 'challenge' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
@@ -45,6 +45,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
   const [isClaiming, setIsClaiming] = useState(false);
+
+  // Sovereign Seed Challenge (MFA) States
+  const [challengeIndex, setChallengeIndex] = useState<number | null>(null);
+  const [challengeInput, setChallengeInput] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
+  const [challengeError, setChallengeError] = useState(false);
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
@@ -409,138 +415,178 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   };
 
   const handleClaim = async () => {
-    if (!window.confirm("Do you want to harvest and claim your accumulated AUR rewards to your Celestial Treasury?")) return;
-    setIsClaiming(true);
-    try {
-      const currentNonce = await fetchNonce(wallet.address);
-      const nextNonce = currentNonce + 1;
+    const action = async () => {
+        setIsClaiming(true);
+        try {
+          const currentNonce = await fetchNonce(wallet.address);
+          const nextNonce = currentNonce + 1;
 
-      const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
-      const signature = await wallet.signMessage(message);
-      
-      const resp = await fetch(`${LOCAL_ENGINE_URL}/claim-op`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-              tx: { address: wallet.address, nonce: nextNonce }, 
-              signature 
-          })
-      });
-      
-      const result = await resp.json();
-      if (result.ok) {
-          addLog(`✅ Reward Claimed: ${ethers.formatUnits(result.amount_atom, 18)} AUR`);
-          setPendingRewardAtom("0");
-          setBalanceAtom((BigInt(balanceAtom) + BigInt(result.amount_atom)).toString());
-          // Refresh after claim
-          setLastCloudOpTime(Date.now());
-      } else {
-          throw new Error(result.error || "Claim failed");
-      }
-    } catch(e: any) {
-      addLog(`❌ Claim Error: ${e.message}`);
+          const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
+          const signature = await wallet.signMessage(message);
+          
+          const resp = await fetch(`${LOCAL_ENGINE_URL}/claim-op`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  tx: { address: wallet.address, nonce: nextNonce }, 
+                  signature 
+              })
+          });
+          
+          const result = await resp.json();
+          if (result.ok) {
+              addLog(`✅ Reward Claimed: ${ethers.formatUnits(result.amount_atom, 18)} AUR`);
+              setPendingRewardAtom("0");
+              setBalanceAtom((BigInt(balanceAtom) + BigInt(result.amount_atom)).toString());
+              setLastCloudOpTime(Date.now());
+          } else {
+              throw new Error(result.error || "Claim failed");
+          }
+        } catch(e: any) {
+          addLog(`❌ Claim Error: ${e.message}`);
+        }
+        setIsClaiming(false);
+    };
+    wrapWithChallenge(action);
+  };
+
+  const triggerSovereignChallenge = (action: () => Promise<void>) => {
+    const randomIndex = Math.floor(Math.random() * 12); // 0-11
+    setChallengeIndex(randomIndex);
+    setChallengeInput("");
+    setChallengeError(false);
+    setPendingAction(() => action);
+    setActiveModal('cloud'); // We'll repurpose the cloud modal or create a new 'challenge' one
+    // Let's actually use a new 'challenge' state for activeModal
+    setActiveModal(null); // Close current first
+    setTimeout(() => {
+        setChallengeIndex(randomIndex);
+        setChallengeInput("");
+        setPendingAction(() => action);
+        // We need 'challenge' in the activeModal type
+    }, 10);
+  };
+
+  const handleVerifyChallenge = async () => {
+    if (challengeIndex === null) return;
+    const correctWord = MOCK_SEED[challengeIndex!].toLowerCase().trim();
+    if (challengeInput.toLowerCase().trim() === correctWord) {
+        setChallengeError(false);
+        setActiveModal(null);
+        if (pendingAction) {
+            await pendingAction();
+            setPendingAction(null);
+        }
+    } else {
+        setChallengeError(true);
+        addLog("❌ Sovereign Challenge Failed: Security Breach Prevented.");
     }
-    setIsClaiming(false);
+  };
+
+  const wrapWithChallenge = (action: () => Promise<void>) => {
+    const randomIndex = Math.floor(Math.random() * 12);
+    setChallengeIndex(randomIndex);
+    setChallengeInput("");
+    setChallengeError(false);
+    setPendingAction(() => action);
+    setActiveModal('challenge');
   };
 
   const handleSend = async () => {
     if(!recipient || !sendAmount) return;
-    if (!window.confirm(`Sovereign Transfer Audit:\n\nRecipient: ${recipient}\nAmount: ${sendAmount} AUR\nNote: 1% Protocol Burn will be applied.\n\nProceed with Digital Signature?`)) return;
-    setIsSending(true);
-    try {
-      const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
-      
-      // 🌟 Replay Protection: Fetch Current Nonce
-      const currentNonce = await fetchNonce(wallet.address);
-      const nextNonce = currentNonce + 1;
-      
-      const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom}`;
-      const signature = await wallet.signMessage(message);
-      
-      // All transactions now go through Aura Cloud (Supabase/GitHub)
-      const txHash = await submitCloudTx('transfer', { 
-          from_address: wallet.address, 
-          to_address: recipient, 
-          amount_atom: amountAtom.toString(),
-          nonce: nextNonce 
-      }, signature);
-      
-      addLog(`Cloud Send Sent (Nonce: ${nextNonce}). Awaiting validation.`);
-      setLastCloudOpTime(Date.now());
-      
-      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
-      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
-      
-      setActiveModal(null);
-      setRecipient("");
-      setSendAmount("");
-    } catch(e: any) {
-      alert(e.message);
-    }
-    setIsSending(false);
+    
+    const action = async () => {
+        setIsSending(true);
+        try {
+            const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
+            const currentNonce = await fetchNonce(wallet.address);
+            const nextNonce = currentNonce + 1;
+            
+            const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom}`;
+            const signature = await wallet.signMessage(message);
+            
+            const txHash = await submitCloudTx('transfer', { 
+                from_address: wallet.address, 
+                to_address: recipient, 
+                amount_atom: amountAtom.toString(),
+                nonce: nextNonce 
+            }, signature);
+            
+            addLog(`Cloud Send Sent. Awaiting validation.`);
+            setLastCloudOpTime(Date.now());
+            setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+            setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
+            
+            setRecipient("");
+            setSendAmount("");
+        } catch(e: any) {
+            alert(e.message);
+        }
+        setIsSending(false);
+    };
+
+    wrapWithChallenge(action);
   };
 
   const handleStake = async () => {
     if(!stakeAmount) return;
-    if (!window.confirm(`Vault Allocation:\n\nLocking ${stakeAmount} AUR into the Sovereign Staking Pool.\n\nNote: Rewards will start accumulating immediately.\n\nProceed?`)) return;
-    setIsStaking(true);
-    try {
-      const amountAtom = ethers.parseUnits(stakeAmount, 18);
-      if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
-      
-      const currentNonce = await fetchNonce(wallet.address);
-      const nextNonce = currentNonce + 1;
+    const action = async () => {
+        setIsStaking(true);
+        try {
+          const amountAtom = ethers.parseUnits(stakeAmount, 18);
+          if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
+          
+          const currentNonce = await fetchNonce(wallet.address);
+          const nextNonce = currentNonce + 1;
 
-      const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-      const signature = await wallet.signMessage(message);
-      
-      const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-      addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
-      setLastCloudOpTime(Date.now());
-      
-      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
-      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
-      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
-      
-      setActiveModal(null);
-      setStakeAmount("");
-    } catch(e: any) {
-      alert(e.message);
-    }
-    setIsStaking(false);
+          const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+          const signature = await wallet.signMessage(message);
+          
+          const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+          addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
+          setLastCloudOpTime(Date.now());
+          
+          setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+          setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
+          setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
+          
+          setStakeAmount("");
+        } catch(e: any) {
+          alert(e.message);
+        }
+        setIsStaking(false);
+    };
+    wrapWithChallenge(action);
   };
   
   const handleUnstake = async () => {
     if(!stakeAmount) return;
-    if (!window.confirm(`Vault Release:\n\nUnlocking ${stakeAmount} AUR and returning it to your Liquid Balance.\n\nProceed?`)) return;
-    setIsStaking(true);
-    try {
-      const amountAtom = ethers.parseUnits(stakeAmount, 18);
-      if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
-      
-      const currentNonce = await fetchNonce(wallet.address);
-      const nextNonce = currentNonce + 1;
+    const action = async () => {
+        setIsStaking(true);
+        try {
+          const amountAtom = ethers.parseUnits(stakeAmount, 18);
+          if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
+          
+          const currentNonce = await fetchNonce(wallet.address);
+          const nextNonce = currentNonce + 1;
 
-      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-      const signature = await wallet.signMessage(message);
-      
-      const txHash = await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-      addLog(`Unstake request broadcasted to Sovereign Fleet.`);
-      setLastCloudOpTime(Date.now());
-      
-      // Double-Guard Optimistic UI: Immediate Snap + Memory Persistence
-      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
-      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
-      
-      setActiveModal(null);
-      setStakeAmount("");
-    } catch(e: any) {
-      alert(e.message);
-    }
-    setIsStaking(false);
+          const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+          const signature = await wallet.signMessage(message);
+          
+          const txHash = await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+          addLog(`Unstake request broadcasted to Sovereign Fleet.`);
+          setLastCloudOpTime(Date.now());
+          
+          setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+          setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
+          setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
+          setStakeAmount("");
+        } catch(e: any) {
+          alert(e.message);
+        }
+        setIsStaking(false);
+    };
+    wrapWithChallenge(action);
   };
 
 
@@ -817,58 +863,54 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
-      {/* Security (Seed Phrase) Modal */}
-      {activeModal === 'seed' && (
-        <div className="modal-overlay" onClick={() => { setActiveModal(null); setIsSeedRevealed(false); }}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-500/10 text-red-400 rounded-xl"><Key size={20}/></div>
-                <h2 className="text-xl font-bold">Secret Recovery Phrase</h2>
+      {/* Sovereign Challenge Modal (MFA) */}
+      {activeModal === 'challenge' && (
+        <div className="modal-overlay" onClick={() => { setActiveModal(null); setPendingAction(null); }}>
+          <div className="modal-content text-center border-indigo-500/30 max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-indigo-500/10 rounded-full text-indigo-400 relative">
+                <Shield size={32} className="relative z-10" />
+                <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse" />
               </div>
-              <button onClick={() => { setActiveModal(null); setIsSeedRevealed(false); }} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
             </div>
             
-            <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-2xl mb-6 flex gap-4">
-              <AlertCircle size={24} className="text-red-400 flex-shrink-0" />
-              <p className="text-sm text-white/70">
-                <strong className="text-red-400 block mb-1">Never share this phrase.</strong>
-                Anyone with these 12 words can access your Sovereign Node and steal your tokens. Aura support will never ask for this.
+            <h2 className="text-2xl font-black mb-2 tracking-tight">Sovereign Challenge</h2>
+            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mb-6">Multi-Factor Digital Audit</p>
+            
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/5 mb-8">
+              <p className="text-sm text-white/60 leading-relaxed mb-4">
+                To authorize this Sovereign Transaction, enter word <span className="text-white font-mono font-black underline underline-offset-4 decoration-indigo-500">#{challengeIndex! + 1}</span> from your Secret Recovery Phrase.
               </p>
-            </div>
-
-            <div className="relative group">
-              <div className={`grid grid-cols-3 gap-3 transition-all duration-500 ${!isSeedRevealed ? 'blur-md opacity-50 select-none' : ''}`}>
-                {MOCK_SEED.map((word, idx) => (
-                  <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center gap-3">
-                    <span className="text-xs text-white/30 font-mono w-4">{idx + 1}</span>
-                    <span className="font-mono text-sm font-bold text-indigo-300">{word}</span>
-                  </div>
-                ))}
-              </div>
               
-              {!isSeedRevealed && (
-                <div className="absolute inset-0 flex items-center justify-center z-10">
-                  <button 
-                    onClick={() => setIsSeedRevealed(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-xl shadow-2xl hover:bg-white/90 transition-all hover:scale-105"
-                  >
-                    <Eye size={18} /> Click to Reveal Phrase
-                  </button>
-                </div>
+              <input 
+                type="password"
+                value={challengeInput}
+                onChange={e => setChallengeInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleVerifyChallenge()}
+                placeholder="Enter word here..."
+                autoFocus
+                className={`w-full bg-black/40 border ${challengeError ? 'border-red-500/50' : 'border-white/10 focus:border-indigo-500'} rounded-xl px-4 py-4 outline-none text-center font-mono text-lg transition-all`}
+              />
+              
+              {challengeError && (
+                <p className="text-[10px] text-red-400 font-bold uppercase mt-3 animate-bounce">Verification Failed. Try Again.</p>
               )}
             </div>
-            
-            {isSeedRevealed && (
-              <div className="mt-6 flex justify-center">
-                 <button 
-                  onClick={() => setIsSeedRevealed(false)}
-                  className="flex items-center gap-2 text-sm text-white/40 hover:text-white transition-all"
-                >
-                  <EyeOff size={16} /> Hide Phrase
-                </button>
-              </div>
-            )}
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => { setActiveModal(null); setPendingAction(null); }}
+                className="flex-1 py-4 text-xs font-bold text-white/20 hover:text-white/40 uppercase tracking-widest transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleVerifyChallenge}
+                className="flex-[2] py-4 bg-indigo-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-400 transition-all shadow-lg active:scale-95 group"
+              >
+                Confirm <Zap size={14} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
         </div>
       )}
