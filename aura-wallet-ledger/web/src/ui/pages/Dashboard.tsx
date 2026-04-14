@@ -43,6 +43,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
   const [recipientProfile, setRecipientProfile] = useState<{nick?: string, exists: boolean} | null>(null);
   const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
+  const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
@@ -259,14 +261,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       }
     };
 
+    const syncWithEngine = async () => {
+      try {
+        const res = await fetch(`${LOCAL_ENGINE_URL}/wallet-summary?address=${wallet.address}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.pending_reward_atom) {
+            setPendingRewardAtom(data.pending_reward_atom);
+          }
+        }
+      } catch (e) { /* engine might be offline */ }
+    };
+
     syncWithSupabase();
+    syncWithEngine();
     heartbeat();
     
     const syncInterval = setInterval(syncWithSupabase, 10000);
+    const engineInterval = setInterval(syncWithEngine, 5000);
     const heartbeatInterval = setInterval(heartbeat, 60000);
 
     return () => {
       clearInterval(syncInterval);
+      clearInterval(engineInterval);
       clearInterval(heartbeatInterval);
     };
   }, [wallet, pendingTxs]);
@@ -389,6 +406,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     if (error) throw new Error(`Queue Failure: ${error.message}`);
     addLog(`Transaction queued for Cloud Settlement. Hash: ${tx_hash.slice(0,12)}...`);
     return tx_hash;
+  };
+
+  const handleClaim = async () => {
+    setIsClaiming(true);
+    try {
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
+
+      const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
+      const signature = await wallet.signMessage(message);
+      
+      const resp = await fetch(`${LOCAL_ENGINE_URL}/claim-op`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+              tx: { address: wallet.address, nonce: nextNonce }, 
+              signature 
+          })
+      });
+      
+      const result = await resp.json();
+      if (result.ok) {
+          addLog(`✅ Reward Claimed: ${ethers.formatUnits(result.amount_atom, 18)} AUR`);
+          setPendingRewardAtom("0");
+          setBalanceAtom((BigInt(balanceAtom) + BigInt(result.amount_atom)).toString());
+          // Refresh after claim
+          setLastCloudOpTime(Date.now());
+      } else {
+          throw new Error(result.error || "Claim failed");
+      }
+    } catch(e: any) {
+      addLog(`❌ Claim Error: ${e.message}`);
+    }
+    setIsClaiming(false);
   };
 
   const handleSend = async () => {
@@ -970,9 +1021,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <div className="flex gap-3">
                   <button 
                     onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
                   >
                     Lock & Earn Output
+                  </button>
+                  <button 
+                    disabled={isClaiming || BigInt(pendingRewardAtom) === 0n}
+                    onClick={handleClaim} 
+                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 border transition-all text-sm shadow-lg ${
+                      isClaiming || BigInt(pendingRewardAtom) === 0n 
+                      ? 'bg-amber-500/10 text-amber-500/40 border-amber-500/10 cursor-not-allowed' 
+                      : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
+                    }`}
+                  >
+                    {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />} 
+                    Claim Output
                   </button>
                 </div>
               </div>
@@ -990,8 +1053,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   <span className="text-[10px] font-bold px-2 py-1 bg-white/10 text-white rounded-md">Sovereign Witness</span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xl font-bold">Staking Performance</p>
-                  <p className="text-sm text-indigo-300 font-medium">Sovereign Staking (100% Fixed Yield)</p>
+                  <p className="text-3xl font-mono font-bold tracking-tighter text-amber-400 animate-pulse-slow">
+                    +{ethers.formatUnits(pendingRewardAtom, 18)}
+                  </p>
+                  <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
+                    Unclaimed Protocol Yield (Live)
+                  </p>
                 </div>
               </div>
 
