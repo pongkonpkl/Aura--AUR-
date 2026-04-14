@@ -642,7 +642,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         // High-Speed RPC Call to Supabase
         const { error } = await supabase.rpc('queue_withdrawal', {
             user_wallet: wallet.address.toLowerCase(),
-            amount_val: balanceAtom,
+            amount_val: balanceAtom.toString(), 
             sig: signature
         });
 
