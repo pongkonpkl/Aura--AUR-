@@ -409,6 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   };
 
   const handleClaim = async () => {
+    if (!window.confirm("Do you want to harvest and claim your accumulated AUR rewards to your Celestial Treasury?")) return;
     setIsClaiming(true);
     try {
       const currentNonce = await fetchNonce(wallet.address);
@@ -444,6 +445,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   const handleSend = async () => {
     if(!recipient || !sendAmount) return;
+    if (!window.confirm(`Sovereign Transfer Audit:\n\nRecipient: ${recipient}\nAmount: ${sendAmount} AUR\nNote: 1% Protocol Burn will be applied.\n\nProceed with Digital Signature?`)) return;
     setIsSending(true);
     try {
       const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
@@ -481,6 +483,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   const handleStake = async () => {
     if(!stakeAmount) return;
+    if (!window.confirm(`Vault Allocation:\n\nLocking ${stakeAmount} AUR into the Sovereign Staking Pool.\n\nNote: Rewards will start accumulating immediately.\n\nProceed?`)) return;
     setIsStaking(true);
     try {
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
@@ -511,6 +514,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   
   const handleUnstake = async () => {
     if(!stakeAmount) return;
+    if (!window.confirm(`Vault Release:\n\nUnlocking ${stakeAmount} AUR and returning it to your Liquid Balance.\n\nProceed?`)) return;
     setIsStaking(true);
     try {
       const amountAtom = ethers.parseUnits(stakeAmount, 18);
