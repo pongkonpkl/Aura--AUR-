@@ -624,6 +624,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     }
   };
 
+  const handleWithdraw = async () => {
+    if (BigInt(balanceAtom) <= 0n) {
+      addLog("❌ Nothing to withdraw from Celestial Treasury.");
+      return;
+    }
+    const action = async () => {
+      setIsClaiming(true); // Re-use isClaiming or create isWithdrawing
+      try {
+        addLog(`Initiating Withdrawal of ${ethers.formatUnits(balanceAtom, 18)} AUR to MetaMask...`);
+        
+        // Safety: In this version, we trigger a mint to the user's address from the cloud validator
+        const currentNonce = await fetchNonce(wallet.address);
+        const nextNonce = currentNonce + 1;
+        const message = `AUR_WITHDRAW:${nextNonce}:${wallet.address.toLowerCase()}:${balanceAtom}`;
+        const signature = await wallet.signMessage(message);
+
+        // Send to Cloud Validator via local engine
+        const resp = await fetch(`${LOCAL_ENGINE_URL}/withdraw-op`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                tx: { address: wallet.address, amount_atom: balanceAtom, nonce: nextNonce }, 
+                signature 
+            })
+        });
+
+        const result = await resp.json();
+        if (result.ok) {
+           addLog(`✅ Withdrawal Successful. AUR is moving to your MetaMask.`);
+           setBalanceAtom("0"); // Clear cloud balance
+        } else {
+           throw new Error(result.error || "Withdrawal failed");
+        }
+      } catch (e: any) {
+        addLog(`❌ Withdrawal Error: ${e.message}`);
+      }
+      setIsClaiming(false);
+    };
+    wrapWithChallenge(action);
+  };
+
   // --- 🛍️ Marketplace Logic (Full-Stack Smoothing) ---
 
   // 1. Live Sync from Supabase (Realtime Feed)
@@ -1155,21 +1196,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   </div>
                 </div>
                 {/* Legacy wealth has been migrated to Supabase-first settlement. No restore required. */}
-
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                   <button 
-                    onClick={() => setActiveModal('send')} 
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold flex justify-center items-center gap-2 border border-white/5 transition-all text-sm"
+                    onClick={() => setActiveModal('send')}
+                    className="flex-1 py-4 bg-indigo-500/10 text-indigo-400 font-bold rounded-2xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all flex items-center justify-center gap-2"
                   >
-                    <ArrowUpRight size={16} className="text-indigo-400"/> Send
+                    <ArrowUpRight size={18} /> Send
                   </button>
                   <button 
-                    onClick={() => setActiveModal('receive')} 
-                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-indigo-500 transition-all text-sm"
+                    onClick={() => setActiveModal('receive')}
+                    className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
                   >
-                    <ArrowDownLeft size={16}/> Receive
+                    <ArrowDownLeft size={18} /> Receive
                   </button>
                 </div>
+                {/* NEW: Withdraw to MetaMask Button */}
+                <button 
+                  onClick={handleWithdraw}
+                  disabled={BigInt(balanceAtom) <= 0n || isClaiming}
+                  className="w-full mt-4 py-4 bg-emerald-500/10 text-emerald-400 font-black text-[11px] uppercase rounded-2xl border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-3 group"
+                >
+                  {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} className="group-hover:animate-pulse" />}
+                  Withdraw to MetaMask Wallet
+                </button>
               </div>
 
               {/* Sovereign Staking (PoS) */}
