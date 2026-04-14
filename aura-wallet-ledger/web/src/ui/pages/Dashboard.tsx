@@ -45,6 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
   const [isClaiming, setIsClaiming] = useState(false);
+  const [nativeBalanceAtom, setNativeBalanceAtom] = useState<string>("0");
 
   // Sovereign Seed Challenge (MFA) States
   const [challengeIndex, setChallengeIndex] = useState<number | null>(null);
@@ -55,8 +56,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   // Marketplace States
   const [marketOrders, setMarketOrders] = useState<any[]>([]);
   const [isMarketLoading, setIsMarketLoading] = useState(false);
-  const [buyOrderAmount, setBuyOrderAmount] = useState("");
-  const [buyOrderQuantity, setBuyOrderQuantity] = useState("");
+  const [sellOrderAmount, setSellOrderAmount] = useState("");
+  const [sellOrderPrice, setSellOrderPrice] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
   const [isMarketExpanded, setIsMarketExpanded] = useState(false);
@@ -172,6 +173,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
           setBalanceAtom((serverBalance - pendingOut + pendingIn).toString());
           setStakedBalanceAtom((serverStaked - pendingStakeOut + pendingStakeIn).toString());
+          setNativeBalanceAtom(profile.native_balance || "0");
           setIsEngineReady(true);
         }
 
@@ -689,60 +691,71 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return () => clearInterval(interval);
   }, []);
 
-  const handlePlaceBuyOrder = async () => {
-    if (!buyOrderAmount || !buyOrderQuantity) return;
+  const handlePlaceSellOrder = async () => {
+    if (!sellOrderAmount || !sellOrderPrice) return;
     setIsPlacingOrder(true);
-    addLog(`Initiating Sovereign Order: ${buyOrderQuantity} AUR...`);
+    addLog(`Initiating P2P Listing: ${sellOrderAmount} AUR for ${sellOrderPrice} Native...`);
 
     try {
-      // Step 1: Blockchain Execution (Native Lock)
-      // This would normally be handled by a MetaMask call. 
-      // For this "Smooth" version, we simulate the confirm and sync to Supabase.
+      const aurAmountAtom = ethers.parseUnits(sellOrderAmount, 18);
+      if (aurAmountAtom > BigInt(balanceAtom)) throw new Error("Insufficient AUR for listing");
+
+      // Step 1: Lock AUR in Supabase (Escrow)
+      // For the internal chain, we simulate the lock by updating the seller's balance
+      const { error: sellError } = await supabase.rpc('lock_aur_for_sale', {
+        user_wallet: wallet.address.toLowerCase(),
+        amount_val: aurAmountAtom.toString()
+      });
+
+      if (sellError) throw sellError;
+
+      const orderId = Number(Date.now());
       
-      const orderId = Number(Date.now()); // Mock ID for demonstration
-      
-      // Step 2: Sync to Supabase Cache (Instant Visibility)
+      // Step 2: Create Listing
       const { error } = await supabase
         .from('marketplace_orders')
         .insert({
           id: orderId,
-          buyer: wallet.address,
-          native_amount: buyOrderAmount,
-          aur_requested: ethers.parseUnits(buyOrderQuantity, 18).toString(),
+          seller: wallet.address,
+          aur_amount: aurAmountAtom.toString(),
+          native_price: ethers.parseUnits(sellOrderPrice, 18).toString(),
           is_active: true
         });
 
       if (error) throw error;
 
-      addLog("✅ Order Snapshot Registered globally via Supabase.");
-      setBuyOrderAmount("");
-      setBuyOrderQuantity("");
+      addLog("✅ Listing Active. AUR secured in Sovereign Escrow.");
+      setSellOrderAmount("");
+      setSellOrderPrice("");
       fetchOrders();
     } catch (e: any) {
-      addLog(`❌ Sync Failure: ${e.message}`);
+      addLog(`❌ Listing Failure: ${e.message}`);
     }
     setIsPlacingOrder(false);
   };
 
-  const handleFulfillOrder = async (orderId: number, aurAmount: string) => {
+  const handleBuyInternal = async (orderId: number, nativePrice: string, aurAmount: string) => {
     const action = async () => {
       setIsFulfilling(orderId);
       try {
-        addLog(`Processing P2P Settlement for Order #${orderId}...`);
+        addLog(`Processing Instant P2P Purchase for Order #${orderId}...`);
         
-        // Step 1: Update Supabase (Optimistic)
-        const { error } = await supabase
-          .from('marketplace_orders')
-          .update({ is_active: false })
-          .eq('id', orderId);
+        // Internal balance check
+        if (BigInt(nativeBalanceAtom) < BigInt(nativePrice)) {
+            throw new Error("Insufficient Internal Native Balance");
+        }
+
+        const { error } = await supabase.rpc('fulfill_internal_buy', {
+            buyer_wallet: wallet.address.toLowerCase(),
+            order_id: orderId
+        });
 
         if (error) throw error;
 
-        // Step 2: Blockchain Interaction (MFA Gated)
-        addLog(`✅ Trade Validated. 1% Burn complete. Native released to you.`);
+        addLog(`✅ Purchase Success! AUR received. Seller paid.`);
         fetchOrders();
       } catch (e: any) {
-        addLog(`❌ Fulfill Error: ${e.message}`);
+        addLog(`❌ Purchase Error: ${e.message}`);
       }
       setIsFulfilling(null);
     };
@@ -1330,8 +1343,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     <Globe size={16} className="text-indigo-400" />
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
                   </div>
-                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Marketplace</span>
-                  <span className="text-[10px] font-black text-emerald-400/60 uppercase tracking-tighter bg-emerald-500/10 px-2 py-0.5 rounded">Live Sync Active</span>
+                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign P2P Shop</span>
+                  <span className="text-[10px] font-black text-emerald-400/60 uppercase tracking-tighter bg-emerald-500/10 px-2 py-0.5 rounded">Maker-Taker Active</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <button 
@@ -1350,17 +1363,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div className="flex justify-between items-end">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Buy Orders</h4>
-                      <span className="text-[9px] text-white/20 font-bold">{marketOrders.length} Peer Requests Found</span>
+                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Global Sell Listings</h4>
+                      <span className="text-[9px] text-white/20 font-bold">{marketOrders.length} Peer Offers Found</span>
                     </div>
                     
                     <div className="space-y-3 max-h-[250px] overflow-y-auto scrollbar-thin pr-3">
                        {marketOrders.length === 0 && !isMarketLoading && (
                          <div className="py-12 text-center border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
                             <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <Globe size={20} className="text-white/10" />
+                              <Coins size={20} className="text-white/10" />
                             </div>
-                            <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">No pending orders in the nebula</p>
+                            <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">No active listings in this nebula</p>
                          </div>
                        )}
                        {marketOrders.map(order => (
@@ -1368,23 +1381,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                             <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/20 group-hover:bg-indigo-500 transition-colors" />
                             <div className="space-y-1">
                                <p className="text-sm font-black text-white group-hover:text-indigo-100 transition-colors">
-                                 {ethers.formatUnits(order.aur_requested || order.aurRequested, 18)} <span className="text-[10px] text-indigo-400 font-bold uppercase">AUR</span>
+                                 {ethers.formatUnits(order.aur_amount || order.aurAmount || "0", 18)} <span className="text-[10px] text-indigo-400 font-bold uppercase">AUR</span>
                                </p>
                                <div className="flex items-center gap-3">
                                  <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                                   Price: {order.native_amount || ethers.formatUnits(order.nativeAmount, 18)} Native
+                                   Price: {ethers.formatUnits(order.native_price || order.nativePrice || "0", 18)} Native
                                  </span>
                                  <span className="text-[8px] font-mono text-white/20 uppercase">ID: #{order.id.toString().slice(-6)}</span>
                                </div>
                             </div>
                             <button 
                               disabled={isFulfilling !== null}
-                              onClick={() => handleFulfillOrder(order.id, order.aur_requested || order.aurRequested)}
+                              onClick={() => handleBuyInternal(order.id, order.native_price || order.nativePrice, order.aur_amount || order.aurAmount)}
                               className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 ${
-                                isFulfilling === order.id ? 'bg-indigo-500/50 text-white/50 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/20'
+                                isFulfilling === order.id ? 'bg-emerald-500/50 text-white/50 animate-pulse' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-emerald-500/20'
                               }`}
                             >
-                               {isFulfilling === order.id ? 'Settling...' : 'Sell Now'}
+                               {isFulfilling === order.id ? 'Buying...' : 'Buy Now'}
                             </button>
                          </div>
                        ))}
@@ -1392,39 +1405,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   </div>
 
                   <div className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 space-y-6 relative overflow-hidden mt-2">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[60px] rounded-full" />
-                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                      <ArrowUpRight size={14} /> Place Buy Order
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[60px] rounded-full" />
+                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                      <ArrowUpRight size={14} /> List AUR for Sale
                     </h4>
                     
                     <div className="space-y-4 relative">
                        <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Quantity (AUR to Buy)</label>
+                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Quantity (AUR to Sell)</label>
                           <input 
-                            value={buyOrderQuantity}
-                            onChange={e => setBuyOrderQuantity(e.target.value)}
+                            value={sellOrderAmount}
+                            onChange={e => setSellOrderAmount(e.target.value)}
                             type="number" 
                             placeholder="0.00" 
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-indigo-100"
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-emerald-500 transition-all text-indigo-100"
                           />
                        </div>
                        
                        <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Offer (Native Amount)</label>
+                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Asking Price (Native)</label>
                           <input 
-                            value={buyOrderAmount}
-                            onChange={e => setBuyOrderAmount(e.target.value)}
+                            value={sellOrderPrice}
+                            onChange={e => setSellOrderPrice(e.target.value)}
                             type="number" 
                             placeholder="0.00" 
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-emerald-400"
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-emerald-500 transition-all text-emerald-400"
                           />
                        </div>
 
                        <button 
-                        onClick={handlePlaceBuyOrder}
-                        disabled={isPlacingOrder || !buyOrderAmount || !buyOrderQuantity}
+                        onClick={handlePlaceSellOrder}
+                        disabled={isPlacingOrder || !sellOrderAmount || !sellOrderPrice}
                         className={`w-full py-5 font-black text-xs uppercase rounded-[1.5rem] transition-all relative group overflow-hidden ${
-                          isPlacingOrder || !buyOrderAmount || !buyOrderQuantity
+                          isPlacingOrder || !sellOrderAmount || !sellOrderPrice
                           ? 'bg-white/5 text-white/20 cursor-not-allowed'
                           : 'bg-white text-black hover:bg-neutral-200'
                         }`}
@@ -1433,12 +1446,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                             {isPlacingOrder ? (
                               <>
                                 <RefreshCw size={14} className="animate-spin" /> 
-                                Broadcasting to Fleet...
+                                Locking AUR in Escrow...
                               </>
                             ) : (
                               <>
-                                <Lock size={14} />
-                                Lock Native & Place Order
+                                <Shield size={14} />
+                                Lock & List AUR
                               </>
                             )}
                          </div>
