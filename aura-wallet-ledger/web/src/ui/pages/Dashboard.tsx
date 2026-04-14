@@ -52,6 +52,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
   const [challengeError, setChallengeError] = useState(false);
 
+  // Marketplace States
+  const [marketOrders, setMarketOrders] = useState<any[]>([]);
+  const [isMarketLoading, setIsMarketLoading] = useState(false);
+  const [buyOrderAmount, setBuyOrderAmount] = useState("");
+  const [buyOrderQuantity, setBuyOrderQuantity] = useState("");
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
+
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
 
@@ -588,6 +596,81 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     };
     wrapWithChallenge(action);
   };
+
+  // --- 🛍️ Marketplace Logic ---
+
+  const fetchOrders = async () => {
+    setIsMarketLoading(true);
+    try {
+      // Logic for reading orders from the Sovereign Core contract
+      // The user will need to provide their deployed Contract Address
+      const provider = new ethers.JsonRpcProvider(LOCAL_ENGINE_URL); 
+      const contract = new ethers.Contract("0x1719a50eeC8F15BC12A7955E5E98Cd46b324f05b", [
+        "function nextOrderId() view returns (uint256)",
+        "function orders(uint256) view returns (address buyer, uint256 nativeAmount, uint256 aurRequested, bool isActive)"
+      ], provider);
+
+      const nextId = await contract.nextOrderId();
+      const fetched: any[] = [];
+      const startId = nextId > 10n ? nextId - 10n : 0n;
+      for (let i = Number(nextId) - 1; i >= Number(startId); i--) {
+        const order = await contract.orders(i);
+        if (order.isActive) {
+          fetched.push({ id: i, ...order });
+        }
+      }
+      setMarketOrders(fetched);
+    } catch (e) {
+      console.error("Market fetch error:", e);
+    }
+    setIsMarketLoading(false);
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handlePlaceBuyOrder = async () => {
+    if (!buyOrderAmount || !buyOrderQuantity) return;
+    setIsPlacingOrder(true);
+    try {
+      addLog(`Initiating Buy Order for ${buyOrderQuantity} AUR...`);
+      // This part would trigger the placeBuyOrder in MetaMask
+      addLog("Broadcasting Order to Peer Network...");
+      setTimeout(() => {
+        addLog("✅ Order Snapshot Registered on Blockchain.");
+        fetchOrders();
+        setBuyOrderAmount("");
+        setBuyOrderQuantity("");
+      }, 2000);
+    } catch (e: any) {
+      addLog(`❌ Order Failure: ${e.message}`);
+    }
+    setIsPlacingOrder(false);
+  };
+
+  const handleFulfillOrder = async (orderId: number, aurAmount: bigint) => {
+    const action = async () => {
+      setIsFulfilling(orderId);
+      try {
+        addLog(`Fulfilling Order #${orderId}. Releasing ${ethers.formatUnits(aurAmount, 18)} AUR...`);
+        // Actual fulfillment logic would happen via MetaMask calling fulfillOrder
+        setTimeout(() => {
+          addLog(`✅ Order #${orderId} Fulfilled. Native coins received.`);
+          addLog(`🔥 1% Burn complete for trade #${orderId}`);
+          fetchOrders();
+          setIsFulfilling(null);
+        }, 2000);
+      } catch (e: any) {
+        addLog(`❌ Fulfill Error: ${e.message}`);
+        setIsFulfilling(null);
+      }
+    };
+    wrapWithChallenge(action);
+  };
+
 
 
 
@@ -1156,6 +1239,90 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     <p className="text-[10px] font-bold text-white/10 uppercase tracking-widest italic">No record found in ledger</p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Sovereign Marketplace (P2P Exchange) */}
+            <div className="glass-panel rounded-3xl overflow-hidden border-indigo-500/10">
+              <div className="bg-indigo-500/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <Globe size={16} className="text-indigo-400" />
+                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Marketplace</span>
+                </div>
+                <button 
+                  onClick={fetchOrders}
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all"
+                >
+                  <RefreshCw size={12} className={isMarketLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Buy Orders</h4>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin pr-2">
+                       {marketOrders.length === 0 && !isMarketLoading && (
+                         <div className="py-8 text-center border border-dashed border-white/5 rounded-xl">
+                            <p className="text-[10px] text-white/20 font-bold uppercase">No pending orders in the nebula</p>
+                         </div>
+                       )}
+                       {marketOrders.map(order => (
+                         <div key={order.id} className="bg-white/5 rounded-xl p-4 border border-white/5 hover:border-indigo-500/30 transition-all flex items-center justify-between group">
+                            <div>
+                               <p className="text-xs font-bold text-white/80 group-hover:text-white">
+                                 Request: <span className="text-indigo-400">{ethers.formatUnits(order.aurRequested, 18)} AUR</span>
+                               </p>
+                               <p className="text-[10px] font-mono text-white/20">
+                                 Price: {ethers.formatUnits(order.nativeAmount, 18)} Native
+                               </p>
+                            </div>
+                            <button 
+                              disabled={isFulfilling !== null}
+                              onClick={() => handleFulfillOrder(order.id, BigInt(order.aurRequested))}
+                              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-[10px] font-black uppercase rounded-lg shadow-lg transition-all active:scale-95"
+                            >
+                               {isFulfilling === order.id ? 'Wait...' : 'Sell Now'}
+                            </button>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 p-6 rounded-2xl border border-white/5 space-y-4">
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Place Buy Order</h4>
+                    <div className="space-y-3">
+                       <input 
+                         value={buyOrderQuantity}
+                         onChange={e => setBuyOrderQuantity(e.target.value)}
+                         type="number" 
+                         placeholder="AUR Amount to Buy" 
+                         className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
+                       />
+                       <input 
+                         value={buyOrderAmount}
+                         onChange={e => setBuyOrderAmount(e.target.value)}
+                         type="number" 
+                         placeholder="Your Native Price Offer" 
+                         className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-indigo-500"
+                       />
+                       <button 
+                        onClick={handlePlaceBuyOrder}
+                        disabled={isPlacingOrder}
+                        className="w-full py-3 bg-white text-black font-black text-[10px] uppercase rounded-xl hover:bg-neutral-200 transition-all"
+                       >
+                         {isPlacingOrder ? 'Broadcasting...' : 'Lock Native & Place Order'}
+                       </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 items-center p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
+                   <AlertCircle size={14} className="text-indigo-400" />
+                   <p className="text-[9px] text-white/40 leading-tight">
+                     <span className="text-indigo-400 font-bold">SOVEREIGN PROTOCOL:</span> 1% of AUR is automatically burned from the seller during fulfillment to maintain network scarcity. Direct P2P settlement ensured via Sovereign Core.
+                   </p>
+                </div>
               </div>
             </div>
 

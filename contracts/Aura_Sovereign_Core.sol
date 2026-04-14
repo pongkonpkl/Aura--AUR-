@@ -13,6 +13,21 @@ contract Aura_Sovereign_Core {
     mapping(address => uint256) public stakedAmount;
     mapping(address => uint256) public rewardDebt; // หนี้รางวัล (Reward Debt) สำหรับ Scalable Distribution
     
+    // --- 🛒 ระบบ Marketplace (Sovereign Order Book) ---
+    struct Order {
+        address buyer;
+        uint256 nativeAmount; // จำนวนเหรียญ Native (เช่น ETH/Native Coin) ที่วางไว้
+        uint256 aurRequested; // จำนวน AUR ที่ต้องการซื้อ
+        bool isActive;        // สถานะออเดอร์
+    }
+
+    mapping(uint256 => Order) public orders;
+    uint256 public nextOrderId;
+
+    event OrderPlaced(uint256 indexed orderId, address indexed buyer, uint256 nativeAmount, uint256 aurRequested);
+    event OrderFulfilled(uint256 indexed orderId, address indexed seller, address indexed buyer, uint256 aurAmount);
+    event OrderCancelled(uint256 indexed orderId, address indexed buyer);
+
     uint256 public totalStaked;
     uint256 public accRewardPerShare; // ดัชนีรางวัลสะสม (Scaled by 1e12)
     uint256 public lastRewardBlock;
@@ -126,5 +141,61 @@ contract Aura_Sovereign_Core {
         for(uint256 i = 0; i < participants.length; i++) {
             balanceOf[participants[i]] += dropAmountPerUser;
         }
+    }
+
+    // --- 🛍️ ฟังก์ชัน Marketplace ---
+
+    // 1. วางคำสั่งซื้อโดยใช้เหรียญ Native (เช่น ETH)
+    function placeBuyOrder(uint256 _aurRequested) external payable whenNotPaused {
+        require(msg.value > 0, "Must send native currency");
+        require(_aurRequested > 0, "Must request > 0 AUR");
+
+        orders[nextOrderId] = Order({
+            buyer: msg.sender,
+            nativeAmount: msg.value,
+            aurRequested: _aurRequested,
+            isActive: true
+        });
+
+        emit OrderPlaced(nextOrderId, msg.sender, msg.value, _aurRequested);
+        nextOrderId++;
+    }
+
+    // 2. ผู้ขาย (Than/Miner) มาเติมเต็มออเดอร์
+    function fulfillOrder(uint256 _orderId) external whenNotPaused {
+        Order storage order = orders[_orderId];
+        require(order.isActive, "Order not active");
+        require(balanceOf[msg.sender] >= order.aurRequested, "Insufficient AUR balance");
+
+        // 🛡️ Checks-Effects-Interactions Pattern
+        order.isActive = false;
+
+        uint256 burnAmount = order.aurRequested / 100; // เผา 1%
+        uint256 finalAur = order.aurRequested - burnAmount;
+
+        // Effects
+        balanceOf[msg.sender] -= order.aurRequested;
+        balanceOf[order.buyer] += finalAur;
+        totalSupply -= burnAmount;
+
+        // Interactions
+        (bool success, ) = payable(msg.sender).call{value: order.nativeAmount}("");
+        require(success, "Native transfer failed");
+
+        emit OrderFulfilled(_orderId, msg.sender, order.buyer, order.aurRequested);
+    }
+
+    // 3. ยกเลิกออเดอร์ (เพื่อรับเงิน Native คืน)
+    function cancelBuyOrder(uint256 _orderId) external whenNotPaused {
+        Order storage order = orders[_orderId];
+        require(order.buyer == msg.sender, "Only buyer can cancel");
+        require(order.isActive, "Order not active");
+
+        order.isActive = false;
+        
+        (bool success, ) = payable(msg.sender).call{value: order.nativeAmount}("");
+        require(success, "Refund failed");
+
+        emit OrderCancelled(_orderId, msg.sender);
     }
 }
