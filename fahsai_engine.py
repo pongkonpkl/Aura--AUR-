@@ -55,21 +55,33 @@ def get_ledger():
     return load_json(LEDGER_FILE)
 
 @app.get("/wallet-summary")
-def get_wallet_summary(address: str):
-    ledger = load_json(LEDGER_FILE)
-    balances = ledger.get("balances", {})
-    staked_balances = ledger.get("staked_balances", {})
-    history = ledger.get("history", [])
-    
-    balance = balances.get(address, "0")
-    staked_balance = staked_balances.get(address, "0")
-    
     # Filter recent events for this address
     my_events = [ev for ev in history if ev.get("from_address") == address or ev.get("to_address") == address or ev.get("address") == address]
     
+    # Calculate PENDING rewards locally for UI view (Shadowing the Algorithm)
+    staking_meta = ledger.get("staking_meta", {})
+    precision = 10**12
+    pending_claim = "0"
+    if staking_meta:
+        total_staked_global = sum(int(v) for v in staked_balances.values())
+        acc_reward = int(staking_meta["acc_reward_per_share"])
+        
+        # Simulate time jump to 'now'
+        now = int(datetime.utcnow().timestamp())
+        elapsed = max(0, now - int(staking_meta["last_reward_time"]))
+        if total_staked_global > 0:
+            reward_per_sec = int(staking_meta["reward_per_second"])
+            acc_reward += (elapsed * reward_per_sec * precision) // total_staked_global
+            
+        user_staked = int(staked_balance)
+        user_debt = int(ledger.get("reward_debts", {}).get(address, "0"))
+        pending_calc = (user_staked * acc_reward // precision) - user_debt
+        pending_claim = str(max(0, pending_calc))
+
     return {
         "balance_atom": str(balance),
         "staked_balance_atom": str(staked_balance),
+        "pending_reward_atom": pending_claim,
         "recent_events": my_events[:50],
         "pending_txs": []
     }
@@ -149,6 +161,42 @@ async def tx_submit(request: Request):
     
     return {"ok": True, "inbox_id": new_event["id"]}
 
+def get_now_ts():
+    return int(datetime.utcnow().timestamp())
+
+def update_pool(ledger):
+    staking_meta = ledger.setdefault("staking_meta", {
+        "acc_reward_per_share": "0",
+        "last_reward_time": get_now_ts(),
+        "reward_per_second": "11574074074074" # 1 AUR / 86400 sec
+    })
+    
+    total_staked = 0
+    staked_balances = ledger.get("staked_balances", {})
+    for addr, val in staked_balances.items():
+        total_staked += int(val)
+    
+    now = get_now_ts()
+    last_reward_time = int(staking_meta["last_reward_time"])
+    
+    if now <= last_reward_time:
+        return
+        
+    if total_staked == 0:
+        staking_meta["last_reward_time"] = now
+        return
+        
+    multiplier = now - last_reward_time
+    reward_per_second = int(staking_meta["reward_per_second"])
+    aura_reward = multiplier * reward_per_second
+    
+    precision = 10**12
+    acc_reward_per_share = int(staking_meta["acc_reward_per_share"])
+    acc_reward_per_share += (aura_reward * precision) // total_staked
+    
+    staking_meta["acc_reward_per_share"] = str(acc_reward_per_share)
+    staking_meta["last_reward_time"] = now
+
 @app.post("/stake-op")
 async def stake_op(request: Request):
     data = await request.json()
@@ -159,7 +207,6 @@ async def stake_op(request: Request):
     address = tx.get("address")
     amount_atom = int(tx.get("amount_atom", 0))
     
-    # 🌟 Replay Protection: Nonce check
     ledger = load_json(LEDGER_FILE)
     nonces = ledger.setdefault("nonces", {})
     expected_nonce = int(nonces.get(address, "0")) + 1
@@ -169,40 +216,65 @@ async def stake_op(request: Request):
         message_str = f"AUR_{op.upper()}:{signed_nonce}:{address}:{amount_atom}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
-        
         if recovered_address.lower() != address.lower():
             return {"ok": False, "error": "Invalid digital signature"}
-            
         if signed_nonce != expected_nonce:
             return {"ok": False, "error": f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"}
-            
     except Exception as e:
         return {"ok": False, "error": f"Signature verification failed: {e}"}
         
-    # Update nonce in ledger
     nonces[address] = str(expected_nonce)
     
-    if amount_atom <= 0:
+    if amount_atom < 0:
         return {"ok": False, "error": "Invalid amount"}
         
-    ledger = load_json(LEDGER_FILE)
     balances = ledger.setdefault("balances", {})
     staked = ledger.setdefault("staked_balances", {})
+    reward_debts = ledger.setdefault("reward_debts", {})
+    
+    # 🌟 Step 1: Update Global Pool
+    update_pool(ledger)
+    acc_reward_per_share = int(ledger["staking_meta"]["acc_reward_per_share"])
+    precision = 10**12
     
     liq_bal = int(balances.get(address, "0"))
     stk_bal = int(staked.get(address, "0"))
+    user_reward_debt = int(reward_debts.get(address, "0"))
     
+    # 🌟 Step 2: Harvest Pending Rewards
+    if stk_bal > 0:
+        pending = (stk_bal * acc_reward_per_share // precision) - user_reward_debt
+        if pending > 0:
+            balances[address] = str(liq_bal + pending)
+            liq_bal += pending
+            total_supply = int(ledger.get("total_supply", "0"))
+            ledger["total_supply"] = str(total_supply + pending)
+            # Record Reward History
+            ledger.setdefault("history", []).insert(0, {
+                "id": f"harvest-{datetime.utcnow().timestamp()}",
+                "event_type": "harvest",
+                "address": address,
+                "amount_atom": str(pending),
+                "created_at": datetime.utcnow().isoformat() + "Z"
+            })
+
+    # 🌟 Step 3: Process Stake/Unstake
     if op == "stake":
         if liq_bal < amount_atom: return {"ok": False, "error": "Insufficient balance"}
         balances[address] = str(liq_bal - amount_atom)
         staked[address] = str(stk_bal + amount_atom)
+        stk_bal += amount_atom
     elif op == "unstake":
         if stk_bal < amount_atom: return {"ok": False, "error": "Insufficient staked balance"}
         staked[address] = str(stk_bal - amount_atom)
         balances[address] = str(liq_bal + amount_atom)
+        stk_bal -= amount_atom
     else:
         return {"ok": False, "error": "Invalid operation"}
         
+    # 🌟 Step 4: Update User Reward Debt
+    reward_debts[address] = str(stk_bal * acc_reward_per_share // precision)
+    
     new_event = {
         "id": f"{op}-{datetime.utcnow().timestamp()}",
         "event_type": op,
@@ -214,6 +286,69 @@ async def stake_op(request: Request):
     save_json(LEDGER_FILE, ledger)
     auto_push_git()
     return {"ok": True, "inbox_id": new_event["id"]}
+
+@app.post("/claim-op")
+async def claim_op(request: Request):
+    data = await request.json()
+    tx = data.get("tx", {})
+    signature = data.get("signature")
+    address = tx.get("address")
+    
+    ledger = load_json(LEDGER_FILE)
+    nonces = ledger.setdefault("nonces", {})
+    expected_nonce = int(nonces.get(address, "0")) + 1
+    signed_nonce = int(tx.get("nonce", 0))
+
+    try:
+        message_str = f"AUR_CLAIM:{signed_nonce}:{address}"
+        message = encode_defunct(text=message_str)
+        recovered_address = Account.recover_message(message, signature=signature)
+        if recovered_address.lower() != address.lower():
+            return {"ok": False, "error": "Invalid digital signature"}
+        if signed_nonce != expected_nonce:
+            return {"ok": False, "error": f"Invalid nonce"}
+    except Exception as e:
+        return {"ok": False, "error": f"Verification failed: {e}"}
+
+    nonces[address] = str(expected_nonce)
+    
+    update_pool(ledger)
+    
+    balances = ledger.setdefault("balances", {})
+    staked = ledger.setdefault("staked_balances", {})
+    reward_debts = ledger.setdefault("reward_debts", {})
+    
+    stk_bal = int(staked.get(address, "0"))
+    user_reward_debt = int(reward_debts.get(address, "0"))
+    acc_reward_per_share = int(ledger["staking_meta"]["acc_reward_per_share"])
+    precision = 10**12
+    
+    pending = (stk_bal * acc_reward_per_share // precision) - user_reward_debt
+    if pending <= 0:
+        return {"ok": False, "error": "No pending rewards"}
+        
+    # Process Reward
+    liq_bal = int(balances.get(address, "0"))
+    balances[address] = str(liq_bal + pending)
+    
+    # Reset Reward Debt
+    reward_debts[address] = str(stk_bal * acc_reward_per_share // precision)
+    
+    # Update Supply
+    total_supply = int(ledger.get("total_supply", "0"))
+    ledger["total_supply"] = str(total_supply + pending)
+    
+    new_event = {
+        "id": f"claim-{datetime.utcnow().timestamp()}",
+        "event_type": "claim",
+        "address": address,
+        "amount_atom": str(pending),
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    ledger.setdefault("history", []).insert(0, new_event)
+    save_json(LEDGER_FILE, ledger)
+    auto_push_git()
+    return {"ok": True, "amount_atom": str(pending)}
 
 NODES_FILE = "nodes.json"
 
@@ -252,12 +387,7 @@ async def heartbeat(request: Request):
 
 @app.post("/force-distribution")
 async def force_distribution():
-    print("[ADMIN] Manual Distribution Triggered")
-    success = await distribute_rewards(force=True)
-    if success:
-        return {"ok": True, "message": "Manual distribution successful."}
-    else:
-        return {"ok": False, "message": "Distribution already completed or failed check logs."}
+    return {"ok": False, "message": "Distribution logic has been replaced by automated pool updates."}
 
 @app.get("/nonce")
 async def get_nonce(address: str):
@@ -291,105 +421,14 @@ def get_network_stats():
 async def startup_event():
     asyncio.create_task(midnight_mint_task())
 
-async def distribute_rewards(force=False):
-    now_utc = datetime.utcnow()
-    today_str = now_utc.strftime("%Y-%m-%d")
-    
-    ledger = load_json(LEDGER_FILE)
-    last_mint = ledger.get("last_mint")
-    
-    if last_mint != today_str or force:
-        print(f"[INFO] {today_str}: Global Distribution Sequence Initiated (Force={force})...")
-        
-        nodes = get_nodes()
-        presence = nodes.get("presence", {})
-        
-        # Identify pools
-        node_addresses = set()
-        for addr, ts in presence.items():
-            try:
-                p_time = datetime.fromisoformat(ts.replace("Z", ""))
-                if (now_utc - p_time).total_seconds() < 86400:
-                     node_addresses.add(addr)
-            except: pass
-            
-        staker_addresses = set()
-        staked_balances = ledger.setdefault("staked_balances", {})
-        for addr, bstr in staked_balances.items():
-            if int(bstr) > 0:
-                staker_addresses.add(addr)
-        
-        # 🌟 Survival Mode Logic: If no nodes, stakers take all. 
-        # If no nothing, owner takes all to keep ledger alive.
-        active_addresses = node_addresses.union(staker_addresses)
-        if not active_addresses:
-            identity = load_json(IDENTITY_FILE)
-            if identity.get("address"):
-                active_addresses.add(identity["address"])
-                node_addresses.add(identity["address"]) # Backup as node
-        
-        if active_addresses:
-            total_reward = 1_000_000_000_000_000_000 # 1 AUR Total / Day
-            
-            # Calculate pool sizes
-            if node_addresses and staker_addresses:
-                pop_pool = int(total_reward * 0.8) # 80% Presence
-                pos_pool = int(total_reward * 0.2) # 20% Stake
-            elif node_addresses:
-                pop_pool = total_reward
-                pos_pool = 0
-            else: # Survival Mode: Only Stakers exist
-                pop_pool = 0
-                pos_pool = total_reward
-            
-            print(f"[INFO] Economy: Split 1 AUR (PoP: {pop_pool}, PoS: {pos_pool})")
-            
-            staked = ledger.setdefault("staked_balances", {})
-            
-            # Process PoP Pool (80%)
-            if node_addresses:
-                per_node = pop_pool // len(node_addresses)
-                for addr in node_addresses:
-                    cur = int(staked.get(addr, "0"))
-                    staked[addr] = str(cur + per_node)
-                    self_reward = per_node
-                    
-                    proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoP".encode()).hexdigest()
-                    ledger.setdefault("history", []).insert(0, {
-                        "id": proof_hash, "event_type": "mining_reward_pop",
-                        "from_address": "System", "to_address": addr,
-                        "amount_atom": str(per_node), "created_at": datetime.utcnow().isoformat() + "Z"
-                    })
-
-            # Process PoS Pool (20%)
-            if staker_addresses:
-                per_staker = pos_pool // len(staker_addresses)
-                for addr in staker_addresses:
-                    cur = int(staked.get(addr, "0"))
-                    staked[addr] = str(cur + per_staker)
-                    
-                    proof_hash = hashlib.sha256(f"{today_str}-{addr}-PoS".encode()).hexdigest()
-                    ledger.setdefault("history", []).insert(0, {
-                        "id": proof_hash, "event_type": "mining_reward_pos",
-                        "from_address": "System", "to_address": addr,
-                        "amount_atom": str(per_staker), "created_at": datetime.utcnow().isoformat() + "Z"
-                    })
-
-            ledger["last_mint"] = today_str
-            # Total supply check (add 1 AUR total)
-            total_supply = int(ledger.get("total_supply", "0"))
-            ledger["total_supply"] = str(total_supply + total_reward)
-            
-            save_json(LEDGER_FILE, ledger)
-            auto_push_git()
-            print(f"[SUCCESS] Global rewards distributed to {len(active_addresses)} nodes.")
-            return True
-    return False
-        
 async def midnight_mint_task():
     while True:
-        await distribute_rewards()
-        await asyncio.sleep(60)
+        # 🌟 Passive Model: updatePool is triggered by user interactions.
+        # However, we can keep a heartbeat if we want to update the timestamp regularly.
+        ledger = load_json(LEDGER_FILE)
+        update_pool(ledger)
+        save_json(LEDGER_FILE, ledger)
+        await asyncio.sleep(600) # Every 10 mins is enough for heartbeat
 
 if __name__ == "__main__":
     print("[INFO] Starting Aura: Fahsai Engine on http://localhost:8000")
