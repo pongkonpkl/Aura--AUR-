@@ -912,26 +912,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               </span>
             </div>
             
-            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shadow-xl gap-1">
-              <button 
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-indigo-500/20 text-indigo-300 rounded-lg font-bold text-[10px] flex items-center gap-2 border border-indigo-500/20"
-              >
-                <Home size={14}/> <span className="hidden lg:inline">Home</span>
-              </button>
-              <button 
-                onClick={() => setActiveModal('seed')}
-                className="px-4 py-2 hover:bg-white/5 text-white/40 hover:text-white rounded-lg font-bold text-[10px] transition-all flex items-center gap-2"
-              >
-                <Shield size={14}/> <span className="hidden lg:inline">Security</span>
-              </button>
-              <button 
-                onClick={() => { setLastCloudOpTime(Date.now()); window.location.reload(); }}
-                className="px-4 py-2 hover:bg-white/5 text-white/40 hover:text-white rounded-lg font-bold text-[10px] transition-all flex items-center gap-2"
-              >
-                <RefreshCw size={14} /> <span className="hidden lg:inline">Sync Now</span>
-              </button>
-            </div>
+            {/* Operational controls removed for secondary hardening. Only Lock Wallet remains. */}
 
 
             
