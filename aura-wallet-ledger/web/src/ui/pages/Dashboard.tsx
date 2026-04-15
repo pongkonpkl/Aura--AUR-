@@ -20,7 +20,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | 'challenge' | 'deposit' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | 'challenge' | 'deposit' | 'withdraw' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
@@ -67,6 +67,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [activeDepositAsset, setActiveDepositAsset] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
   const [isSimulatingDeposit, setIsSimulatingDeposit] = useState(false);
   const [depositStep, setDepositStep] = useState<'idle' | 'waiting' | 'confirming' | 'success'>('idle');
+  const [activeWithdrawAsset, setActiveWithdrawAsset] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
+  const [withdrawStep, setWithdrawStep] = useState<'idle' | 'processing' | 'confirming' | 'success'>('idle');
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
+  const [withdrawTargetInput, setWithdrawTargetInput] = useState("");
 
   // --- 🛰️ Sovereign Bridge Utilities ---
   const getGatewayAddress = (asset: string) => {
@@ -108,6 +112,48 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       }, 3000);
     }, 2000);
   };
+
+  const handleSimulateWithdraw = () => {
+    if (!withdrawAmountInput || !withdrawTargetInput) return toast.error("Provide Amount and Target Address");
+    
+    let currentBalance = 0;
+    if (activeWithdrawAsset === 'NATIVE') currentBalance = parseFloat(nativeBalance);
+    else if (activeWithdrawAsset === 'BTC') currentBalance = parseFloat(btcBalance);
+    else if (activeWithdrawAsset === 'ETH') currentBalance = parseFloat(ethBalance);
+
+    const withdrawVal = parseFloat(withdrawAmountInput);
+    if (withdrawVal <= 0 || isNaN(withdrawVal) || withdrawVal > currentBalance) {
+      return toast.error("Insufficient Vault Balance");
+    }
+
+    setWithdrawStep('processing');
+    addLog(`Initiating Egress Protocol: Burning ${withdrawVal} ${activeWithdrawAsset}...`);
+    
+    setTimeout(() => {
+      setWithdrawStep('confirming');
+      addLog(`Relayer signing L1 transaction to ${withdrawTargetInput.slice(0, 8)}...`);
+      
+      setTimeout(() => {
+        if (activeWithdrawAsset === 'NATIVE') {
+          setNativeBalance((currentBalance - withdrawVal).toFixed(2));
+        } else if (activeWithdrawAsset === 'BTC') {
+          setBtcBalance((currentBalance - withdrawVal).toFixed(3));
+        } else {
+          setEthBalance((currentBalance - withdrawVal).toFixed(2));
+        }
+        setWithdrawStep('success');
+        addLog(`Vault Egress Complete. Zero-Fee Sovereign Protocol Applied.`);
+        toast.success(`Withdrew ${withdrawVal} ${activeWithdrawAsset} Successfully!`);
+        setTimeout(() => {
+            setWithdrawStep('idle');
+            setWithdrawAmountInput("");
+            setWithdrawTargetInput("");
+            setActiveModal(null);
+        }, 3000);
+      }, 3000);
+    }, 2000);
+  };
+
   const [nativeBalance, setNativeBalance] = useState("0.00");
   const [btcBalance, setBtcBalance] = useState("0.000");
   const [ethBalance, setEthBalance] = useState("0.00");
@@ -1207,6 +1253,78 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
+      {/* --- 🚀 Sovereign Egress (Withdraw) Modal --- */}
+      {activeModal === 'withdraw' && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="modal-content max-w-xl border-pink-500/20" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Withdraw Gateway</h2>
+                  <p className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mt-1">Cross-Chain Asset Egress</p>
+                </div>
+                <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
+             </div>
+
+             <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
+                {['NATIVE', 'BTC', 'ETH'].map((asset) => (
+                  <button 
+                    key={asset}
+                    onClick={() => setActiveWithdrawAsset(asset as any)}
+                    className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${activeWithdrawAsset === asset ? 'bg-pink-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                  >
+                    {asset}
+                  </button>
+                ))}
+             </div>
+
+             <div className="space-y-6">
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">External Destination Address</label>
+                   <input 
+                      type="text"
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm font-mono text-white placeholder-white/20 focus:border-pink-500/50 outline-none transition-all"
+                      placeholder={`Enter external ${activeWithdrawAsset} address...`}
+                      value={withdrawTargetInput}
+                      onChange={(e) => setWithdrawTargetInput(e.target.value)}
+                   />
+                </div>
+
+                <div className="space-y-2">
+                   <div className="flex justify-between">
+                     <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Withdrawal Amount</label>
+                     <span className="text-[10px] font-mono text-pink-400">Available: {activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance}</span>
+                   </div>
+                   <div className="relative">
+                     <input 
+                        type="number"
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xl font-mono text-white placeholder-white/20 focus:border-pink-500/50 outline-none transition-all pr-20"
+                        placeholder="0.00"
+                        step="0.01"
+                        value={withdrawAmountInput}
+                        onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                     />
+                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-white/40">{activeWithdrawAsset}</span>
+                   </div>
+                   <p className="text-[10px] text-emerald-400 font-bold mt-2">Zero Sovereign Gas Protocol Applied.</p>
+                </div>
+
+                <button 
+                 disabled={withdrawStep !== 'idle'}
+                 onClick={handleSimulateWithdraw}
+                 className={`w-full mt-4 py-4 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-2 ${
+                   withdrawStep === 'success' ? 'bg-emerald-500 text-white' : 'bg-pink-600 text-white hover:bg-pink-500'
+                 }`}
+                >
+                  {withdrawStep !== 'idle' && withdrawStep !== 'success' ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpRight size={14} />}
+                  {withdrawStep === 'idle' && `Execute ${activeWithdrawAsset} Egress`}
+                  {withdrawStep === 'processing' && 'Burning Vault Balance...'}
+                  {withdrawStep === 'confirming' && 'Relayer Processing L1 Swap...'}
+                  {withdrawStep === 'success' && 'Withdrawal Finalized!'}
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
 
 
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -1756,12 +1874,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   </div>
                </div>
 
-               <button 
-                  onClick={() => setActiveModal('deposit')}
-                  className="w-full py-4 bg-white/5 hover:bg-indigo-500/20 hover:text-indigo-400 rounded-2xl border border-white/5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] transition-all"
-               >
-                  Deposit / Bridging
-               </button>
+               <div className="flex gap-3">
+                 <button 
+                    onClick={() => setActiveModal('deposit')}
+                    className="flex-1 py-4 bg-white/5 hover:bg-indigo-500/20 hover:text-indigo-400 rounded-xl border border-white/5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] transition-all"
+                 >
+                    Bridge In
+                 </button>
+                 <button 
+                    onClick={() => setActiveModal('withdraw')}
+                    className="flex-1 py-4 bg-white/5 hover:bg-pink-500/20 hover:text-pink-400 rounded-xl border border-white/5 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] transition-all"
+                 >
+                    Bridge Out
+                 </button>
+               </div>
             </div>
 
             <div className="glass-panel p-6 rounded-3xl space-y-6">
