@@ -1154,7 +1154,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <div className="space-y-6">
                    <div className="p-4 bg-white/5 rounded-3xl border border-white/5 flex flex-col items-center justify-center aspect-square">
                       <div className="p-4 bg-white rounded-2xl mb-4">
-                        <QRCodeSVG value={wallet.address} size={140} />
+                        <QRCodeSVG value={getGatewayAddress(activeDepositAsset)} size={140} />
                       </div>
                       <p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Scan to Bridge</p>
                    </div>
