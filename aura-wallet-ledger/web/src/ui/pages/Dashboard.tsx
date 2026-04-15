@@ -110,34 +110,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return wallet.address;
   };
 
-  const handleSimulateDeposit = () => {
+  const handleSimulateDeposit = async () => {
+    let depositAmount = 0;
+    if (activeDepositAsset === 'NATIVE') depositAmount = 10.0;
+    if (activeDepositAsset === 'BTC') depositAmount = 0.001;
+    if (activeDepositAsset === 'ETH') depositAmount = 0.1;
+
     setDepositStep('waiting');
     addLog(`Broadcasting Bridge Intent for ${activeDepositAsset}...`);
     
-    setTimeout(() => {
+    setTimeout(async () => {
       setDepositStep('confirming');
       addLog(`External Node detected inflow on Gateway. Awaiting 3 Sovereign Confirmations...`);
       
-      setTimeout(() => {
-        if (activeDepositAsset === 'NATIVE') {
-          const current = parseFloat(nativeBalance);
-          setNativeBalance((current + 10.0).toFixed(2));
-          addLog(`Successfully Bridged 10.00 NATIVE to Sovereign Vault.`);
-        } else if (activeDepositAsset === 'BTC') {
-          setBtcBalance((parseFloat(btcBalance) + 0.001).toFixed(3));
-          addLog(`Successfully Wrapped 0.001 BTC via Aura Bridge.`);
-        } else {
-          setEthBalance((parseFloat(ethBalance) + 0.1).toFixed(2));
-          addLog(`Successfully Wrapped 0.10 ETH inside Multi-Vault.`);
-        }
-        setDepositStep('success');
-        toast.success(`${activeDepositAsset} Inflow Confirmed!`);
-        setTimeout(() => setDepositStep('idle'), 3000);
-      }, 3000);
+      // Hit Supabase Cloud
+      const { data, error } = await supabase.rpc('rpc_bridge_asset', {
+        p_wallet_address: wallet.address.toLowerCase(),
+        p_asset: activeDepositAsset,
+        p_amount: depositAmount,
+        p_is_deposit: true
+      });
+
+      if (error || !data?.success) {
+         setDepositStep('idle');
+         return toast.error("Bridge Communication Failed (Did you run the Migration SQL?)");
+      }
+
+      if (activeDepositAsset === 'NATIVE') {
+        const current = parseFloat(nativeBalance);
+        setNativeBalance((current + depositAmount).toFixed(2));
+        addLog(`Successfully Bridged 10.00 NATIVE to Sovereign Vault.`);
+      } else if (activeDepositAsset === 'BTC') {
+        setBtcBalance((parseFloat(btcBalance) + depositAmount).toFixed(3));
+        addLog(`Successfully Wrapped 0.001 BTC via Aura Bridge.`);
+      } else {
+        setEthBalance((parseFloat(ethBalance) + depositAmount).toFixed(2));
+        addLog(`Successfully Wrapped 0.10 ETH inside Multi-Vault.`);
+      }
+      setDepositStep('success');
+      toast.success(`${activeDepositAsset} Inflow Confirmed!`);
+      setTimeout(() => setDepositStep('idle'), 3000);
     }, 2000);
   };
 
-  const handleSimulateWithdraw = () => {
+  const handleSimulateWithdraw = async () => {
     if (!withdrawAmountInput || !withdrawTargetInput) return toast.error("Provide Amount and Target Address");
     
     let currentBalance = 0;
@@ -153,27 +169,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     setWithdrawStep('processing');
     addLog(`Initiating Egress Protocol: Burning ${withdrawVal} ${activeWithdrawAsset}...`);
     
-    setTimeout(() => {
+    setTimeout(async () => {
       setWithdrawStep('confirming');
       addLog(`Relayer signing L1 transaction to ${withdrawTargetInput.slice(0, 8)}...`);
       
+      // Hit Supabase Cloud
+      const { data, error } = await supabase.rpc('rpc_bridge_asset', {
+        p_wallet_address: wallet.address.toLowerCase(),
+        p_asset: activeWithdrawAsset,
+        p_amount: withdrawVal,
+        p_is_deposit: false
+      });
+
+      if (error || !data?.success) {
+         setWithdrawStep('idle');
+         return toast.error("Egress Communication Failed (Did you run the Migration SQL?)");
+      }
+
+      if (activeWithdrawAsset === 'NATIVE') {
+        setNativeBalance((currentBalance - withdrawVal).toFixed(2));
+      } else if (activeWithdrawAsset === 'BTC') {
+        setBtcBalance((currentBalance - withdrawVal).toFixed(3));
+      } else {
+        setEthBalance((currentBalance - withdrawVal).toFixed(2));
+      }
+      setWithdrawStep('success');
+      addLog(`Vault Egress Complete. Zero-Fee Sovereign Protocol Applied.`);
+      toast.success(`Withdrew ${withdrawVal} ${activeWithdrawAsset} Successfully!`);
       setTimeout(() => {
-        if (activeWithdrawAsset === 'NATIVE') {
-          setNativeBalance((currentBalance - withdrawVal).toFixed(2));
-        } else if (activeWithdrawAsset === 'BTC') {
-          setBtcBalance((currentBalance - withdrawVal).toFixed(3));
-        } else {
-          setEthBalance((currentBalance - withdrawVal).toFixed(2));
-        }
-        setWithdrawStep('success');
-        addLog(`Vault Egress Complete. Zero-Fee Sovereign Protocol Applied.`);
-        toast.success(`Withdrew ${withdrawVal} ${activeWithdrawAsset} Successfully!`);
-        setTimeout(() => {
-            setWithdrawStep('idle');
-            setWithdrawAmountInput("");
-            setWithdrawTargetInput("");
-            setActiveModal(null);
-        }, 3000);
+          setWithdrawStep('idle');
+          setWithdrawAmountInput("");
+          setWithdrawTargetInput("");
+          setActiveModal(null);
       }, 3000);
     }, 2000);
   };
@@ -284,6 +311,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         if (profile) {
           const serverBalance = BigInt(profile.balance || "0");
           const serverStaked = BigInt(profile.staked_balance || "0");
+
+          // Sync Cloud Vault Assets
+          setNativeBalance(profile.native_balance != null ? Number(profile.native_balance).toFixed(2) : "0.00");
+          setBtcBalance(profile.btc_balance != null ? Number(profile.btc_balance).toFixed(3) : "0.000");
+          setEthBalance(profile.eth_balance != null ? Number(profile.eth_balance).toFixed(2) : "0.00");
           
           // Apply Optimistic Offsets
           const pendingOut = pendingTxs.filter(t => t.type === 'transfer' || t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
