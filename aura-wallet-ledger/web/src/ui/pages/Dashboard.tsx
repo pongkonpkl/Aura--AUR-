@@ -178,7 +178,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         p_wallet_address: wallet.address.toLowerCase(),
         p_asset: activeWithdrawAsset,
         p_amount: withdrawVal,
-        p_is_deposit: false
+        p_is_deposit: false,
+        p_dest_address: withdrawTargetInput
       });
 
       if (error || !data?.success) {
@@ -186,6 +187,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
          return toast.error("Egress Communication Failed (Did you run the Migration SQL?)");
       }
 
+      // The Relayer polling requires time. UI reacts instantly but marks it logically 'pending'.
       if (activeWithdrawAsset === 'NATIVE') {
         setNativeBalance((currentBalance - withdrawVal).toFixed(2));
       } else if (activeWithdrawAsset === 'BTC') {
@@ -194,14 +196,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         setEthBalance((currentBalance - withdrawVal).toFixed(2));
       }
       setWithdrawStep('success');
-      addLog(`Vault Egress Complete. Zero-Fee Sovereign Protocol Applied.`);
-      toast.success(`Withdrew ${withdrawVal} ${activeWithdrawAsset} Successfully!`);
+      addLog(`Asset Egress Queued. Awaiting Oracle Relayer Confirmation...`);
+      toast.success(`Egress request of ${withdrawVal} ${activeWithdrawAsset} queued to L1.`);
       setTimeout(() => {
           setWithdrawStep('idle');
           setWithdrawAmountInput("");
           setWithdrawTargetInput("");
           setActiveModal(null);
-      }, 3000);
+      }, 4000);
     }, 2000);
   };
 
@@ -1359,14 +1361,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                  disabled={withdrawStep !== 'idle'}
                  onClick={handleSimulateWithdraw}
                  className={`w-full mt-4 py-4 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-2 ${
-                   withdrawStep === 'success' ? 'bg-emerald-500 text-white' : 'bg-pink-600 text-white hover:bg-pink-500'
+                   withdrawStep === 'success' ? 'bg-amber-500 text-white' : 'bg-pink-600 text-white hover:bg-pink-500'
                  }`}
                 >
-                  {withdrawStep !== 'idle' && withdrawStep !== 'success' ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpRight size={14} />}
-                  {withdrawStep === 'idle' && `Execute ${activeWithdrawAsset} Egress`}
+                  {withdrawStep !== 'idle' ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpRight size={14} />}
+                  {withdrawStep === 'idle' && `Request ${activeWithdrawAsset} Egress`}
                   {withdrawStep === 'processing' && 'Burning Vault Balance...'}
-                  {withdrawStep === 'confirming' && 'Relayer Processing L1 Swap...'}
-                  {withdrawStep === 'success' && 'Withdrawal Finalized!'}
+                  {withdrawStep === 'confirming' && 'Queueing L1 Relayer...'}
+                  {withdrawStep === 'success' && 'Processing on L1...'}
                 </button>
              </div>
           </div>
