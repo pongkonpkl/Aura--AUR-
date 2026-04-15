@@ -1559,10 +1559,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               </div>
               <div className="max-h-[320px] overflow-y-auto divide-y divide-white/5 scrollbar-thin">
                 {history.map((tx, i) => {
-                  const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase();
+                  const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase() && tx.tx_type === 'transfer';
                   const isStake = tx.tx_type === 'stake';
                   const isUnstake = tx.tx_type === 'unstake';
                   const isReward = tx.tx_type === 'reward' || tx.tx_type === 'presence';
+                  const isBridgeIn = tx.tx_type === 'bridge_in';
+                  const isBridgeOut = tx.tx_type === 'bridge_out';
                   
                   return (
                     <div key={tx.id || i} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
@@ -1571,11 +1573,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                           isReward ? 'bg-amber-500/10 text-amber-400' :
                           isStake ? 'bg-emerald-500/10 text-emerald-400' :
                           isUnstake ? 'bg-orange-500/10 text-orange-400' :
+                          isBridgeIn ? 'bg-green-500/10 text-green-400' :
+                          isBridgeOut ? 'bg-pink-600/10 text-pink-500' :
                           isOut ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'
                         }`}>
                           {isReward ? <Zap size={14} /> :
                            isStake ? <Lock size={14} /> :
                            isUnstake ? <RefreshCw size={14} /> :
+                           isBridgeIn ? <ArrowDownLeft size={14} /> :
+                           isBridgeOut ? <ArrowUpRight size={14} /> :
                            isOut ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
                         </div>
                         <div>
@@ -1583,6 +1589,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                             {isReward ? 'Network Protocol Yield' :
                              isStake ? 'Vault Allocation (Stake)' :
                              isUnstake ? 'Vault Release (Unstake)' :
+                             isBridgeIn ? 'Cross-Chain Inflow (Bridge In)' :
+                             isBridgeOut ? 'Sovereign Egress (Bridge Out)' :
                              isOut ? `Sent: ${tx.to_address?.slice(0,6)}...` : `Recv: ${tx.from_address?.slice(0,6)}...`}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -1597,9 +1605,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`text-xs font-mono font-black ${isOut || isStake ? 'text-white/40' : 'text-emerald-400'}`}>
-                          {isOut || isStake ? '-' : '+'}{(() => {
-                            try { return ethers.formatUnits(tx.amount?.toString() || "0", 18); }
+                        <p className={`text-xs font-mono font-black ${isOut || isStake || isBridgeOut ? 'text-white/40' : 'text-emerald-400'}`}>
+                          {isOut || isStake || isBridgeOut ? '-' : '+'}{(() => {
+                            try { 
+                                // Bridges don't use 1e18 atom scaling because they aren't AUR
+                                if (isBridgeIn || isBridgeOut) return Number(tx.amount).toFixed(4);
+                                return ethers.formatUnits(tx.amount?.toString() || "0", 18); 
+                            }
                             catch { return "0.00"; }
                           })()}
                         </p>
