@@ -2,7 +2,7 @@ name: Aura Midnight Distribution
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Midnight UTC
+    - cron: '0 * * * *' # Every Hour (Professional Pulse)
   workflow_dispatch: # Allow manual trigger
 
 jobs:

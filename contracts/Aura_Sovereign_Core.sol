@@ -16,8 +16,9 @@ contract Aura_Sovereign_Core {
     // --- 🛒 ระบบ Marketplace (Sovereign Sell Orders) ---
     struct Order {
         address seller;
-        uint256 nativePrice; // ราคาที่ต้องการ (Native Currency)
+        uint256 nativePrice; // ราคาที่ต้องการ (ในสกุลเงินที่เลือก)
         uint256 aurAmount;   // จำนวนเหรียญ AUR ที่ฝากขาย
+        string currency;      // สกุลเงินที่ต้องการ (NATIVE, BTC, ETH)
         bool isActive;       // สถานะออเดอร์
     }
 
@@ -158,6 +159,7 @@ contract Aura_Sovereign_Core {
             seller: msg.sender,
             nativePrice: _nativePrice,
             aurAmount: _aurAmount,
+            currency: "NATIVE", // Default
             isActive: true
         });
 
@@ -204,5 +206,21 @@ contract Aura_Sovereign_Core {
         balanceOf[msg.sender] += order.aurAmount;
 
         emit OrderCancelled(_orderId, msg.sender);
+    }
+
+    // 4. ระบบแลกเปลี่ยนทันที (Swap Protocol) พร้อมการเผาทำลา 1%
+    function swapAUR(uint256 _amountIn, string calldata _targetCurrency) external whenNotPaused {
+        require(_amountIn >= 100, "Min swap 100 wei");
+        require(balanceOf[msg.sender] >= _amountIn, "Insufficient AUR");
+
+        uint256 burnAmount = _amountIn / 100; // เผา 1%
+        uint256 amountToSwap = _amountIn - burnAmount;
+
+        // Logic สำหรับการแลกในเชน (Simulated Settlement)
+        balanceOf[msg.sender] -= _amountIn;
+        totalSupply -= burnAmount;
+
+        // ในสัญญาจริง เราจะส่งเหรียญเป้าหมายออกไป 
+        // แต่ในระบบ Internal ลอจิกจะถูกจัดการโดย Cloud Settlement ต่อครับ
     }
 }

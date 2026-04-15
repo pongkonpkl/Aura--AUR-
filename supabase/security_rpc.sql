@@ -134,38 +134,62 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. Atomic Daily Reward Distribution (100% PoS)
+-- 3. Atomic Periodic Reward Distribution (Professional PoS Pulse)
 CREATE OR REPLACE FUNCTION rpc_distribute_rewards() 
 RETURNS JSONB AS $$
 DECLARE
-    v_total_reward_atom NUMERIC := 1000000000000000000; -- Exactly 1.0 AUR
+    v_reward_per_sec NUMERIC := 11574074074074; -- 1 AUR / 86400 sec
+    v_last_dist_time TIMESTAMP;
+    v_seconds_elapsed NUMERIC;
+    v_total_reward_atom NUMERIC;
     v_total_staked NUMERIC;
     v_dist_id UUID;
 BEGIN
-    -- 1. Identify total staked across the network
+    -- Security: Only allow Service Role to trigger distribution
+    IF auth.role() <> 'service_role' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Service Role required');
+    END IF;
+
+    -- 1. Fetch last distribution time
+    SELECT created_at INTO v_last_dist_time FROM distributions ORDER BY created_at DESC LIMIT 1;
+    
+    -- If no previous distribution, default to 1 hour ago
+    IF v_last_dist_time IS NULL THEN
+        v_seconds_elapsed := 3600;
+    ELSE
+        v_seconds_elapsed := EXTRACT(EPOCH FROM (NOW() - v_last_dist_time));
+    END IF;
+
+    -- Safety Cap: Max 24 hours of rewards in one go
+    v_seconds_elapsed := LEAST(v_seconds_elapsed, 86400);
+
+    v_total_reward_atom := v_seconds_elapsed * v_reward_per_sec;
+
+    -- 2. Identify total staked across the network
     SELECT COALESCE(sum(staked_balance), 0) INTO v_total_staked FROM profiles WHERE staked_balance > 0;
 
-    -- 2. Distribute only if people are staking
-    IF v_total_staked > 0 THEN
-        -- Add rewards proportional to their stake
+    -- 3. Distribute only if people are staking
+    IF v_total_staked > 0 AND v_total_reward_atom > 0 THEN
+        -- Add rewards proportional to their stake (Multiply before divide for precision)
         UPDATE profiles
-        SET balance = balance + ((staked_balance / v_total_staked) * v_total_reward_atom),
+        SET balance = balance + FLOOR((staked_balance * v_total_reward_atom) / v_total_staked),
             updated_at = NOW()
         WHERE staked_balance > 0;
         
         -- Log the successful distribution
         INSERT INTO distributions (amount, dist_type) 
-        VALUES (v_total_reward_atom, 'pos_staking_100')
+        VALUES (v_total_reward_atom, 'pos_hourly_pulse')
         RETURNING id INTO v_dist_id;
 
         RETURN jsonb_build_object(
             'success', true, 
             'distribution_id', v_dist_id, 
-            'total_aur', 1,
+            'total_aur_atoms', v_total_reward_atom,
+            'seconds_elapsed', v_seconds_elapsed,
             'recipients_count', (SELECT count(*) FROM profiles WHERE staked_balance > 0)
         );
     ELSE
-        RETURN jsonb_build_object('success', false, 'error', 'No active stakers found');
+        RETURN jsonb_build_object('success', false, 'error', 'No active stakers or zero time elapsed');
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

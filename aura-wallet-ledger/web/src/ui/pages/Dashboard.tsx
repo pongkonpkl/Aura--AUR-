@@ -46,6 +46,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
   const [isClaiming, setIsClaiming] = useState(false);
   const [nativeBalanceAtom, setNativeBalanceAtom] = useState<string>("0");
+  const [btcBalanceAtom, setBtcBalanceAtom] = useState<string>("0");
+  const [ethBalanceAtom, setEthBalanceAtom] = useState<string>("0");
+  const [btcAddress, setBtcAddress] = useState<string>("");
+  const [ethAddress, setEthAddress] = useState<string>("");
 
   // Sovereign Seed Challenge (MFA) States
   const [challengeIndex, setChallengeIndex] = useState<number | null>(null);
@@ -58,10 +62,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [isMarketLoading, setIsMarketLoading] = useState(false);
   const [sellOrderAmount, setSellOrderAmount] = useState("");
   const [sellOrderPrice, setSellOrderPrice] = useState("");
+  const [sellOrderCurrency, setSellOrderCurrency] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
   const [isMarketExpanded, setIsMarketExpanded] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
+  const [activeMarketTab, setActiveMarketTab] = useState<'p2p' | 'swap'>('p2p');
+  const [swapFrom, setSwapFrom] = useState<'AUR' | 'BTC' | 'ETH' | 'NATIVE'>('AUR');
+  const [swapTo, setSwapTo] = useState<'BTC' | 'ETH' | 'AUR' | 'NATIVE'>('BTC');
+  const [swapAmount, setSwapAmount] = useState("");
+  const [isSwapping, setIsSwapping] = useState(false);
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
@@ -174,6 +184,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           setBalanceAtom((serverBalance - pendingOut + pendingIn).toString());
           setStakedBalanceAtom((serverStaked - pendingStakeOut + pendingStakeIn).toString());
           setNativeBalanceAtom(profile.native_balance || "0");
+          setBtcBalanceAtom(profile.btc_balance || "0");
+          setEthBalanceAtom(profile.eth_balance || "0");
+          setBtcAddress(profile.btc_address || `bc1q${wallet.address.slice(2, 12)}...`);
+          setEthAddress(profile.eth_address || wallet.address);
           setIsEngineReady(true);
         }
 
@@ -757,7 +771,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       } catch (e: any) {
         addLog(`❌ Purchase Error: ${e.message}`);
       }
-      setIsFulfilling(null);
+    wrapWithChallenge(action);
+  };
+
+  /**
+   * QUANTUM SWAP ENGINE
+   * Handles instant asset exchange via the Sovereign AMM Internal Pool.
+   * Performs a 1% AUR burn logic if swapping from AUR.
+   */
+  const handleInstantSwap = async () => {
+    if (!swapAmount || isSwapping) return;
+    const action = async () => {
+        setIsSwapping(true);
+        addLog(`Quantum Swap Initiated: ${swapAmount} ${swapFrom} to ${swapTo}...`);
+        
+        try {
+            const amountIn = ethers.parseUnits(swapAmount, 18);
+            
+            // 1% Burn logic for AUR
+            if (swapFrom === 'AUR') {
+                const burnAmount = amountIn / 100n;
+                addLog(`🔥 Internal protocol burn triggered: ${ethers.formatUnits(burnAmount, 18)} AUR removed from supply.`);
+            }
+
+            const { error } = await supabase.rpc('execute_instant_swap', {
+                user_wallet: wallet.address.toLowerCase(),
+                from_asset: swapFrom,
+                to_asset: swapTo,
+                amount_val: amountIn.toString()
+            });
+
+            if (error) throw error;
+
+            addLog(`✅ Quantum Swap Successful! Assets converted atomically.`);
+            setSwapAmount("");
+            fetchOrders();
+        } catch (e: any) {
+            addLog(`❌ Swap Error: ${e.message}`);
+        }
+        setIsSwapping(false);
     };
     wrapWithChallenge(action);
   };
@@ -1344,7 +1396,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
                   </div>
                   <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign P2P Shop</span>
-                  <span className="text-[10px] font-black text-emerald-400/60 uppercase tracking-tighter bg-emerald-500/10 px-2 py-0.5 rounded">Maker-Taker Active</span>
+                  <div className="flex gap-2 bg-black/20 p-1 rounded-xl">
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMarketTab('p2p'); }}
+                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeMarketTab === 'p2p' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-white/20 hover:text-white/40'}`}
+                     >
+                        P2P Listing
+                     </button>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMarketTab('swap'); }}
+                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeMarketTab === 'swap' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-white/20 hover:text-white/40'}`}
+                     >
+                        Quantum Swap
+                     </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <button 
@@ -1360,7 +1425,226 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
               {isMarketExpanded && (
                 <div className="p-8 animate-in slide-in-from-top-2 duration-300">
+                  {activeMarketTab === 'p2p' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-end">
+                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Global Sell Listings</h4>
+                      <span className="text-[9px] text-white/20 font-bold">{marketOrders.length} Peer Offers Found</span>
+                    </div>
+                    
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto scrollbar-thin pr-3">
+                       {marketOrders.length === 0 && !isMarketLoading && (
+                         <div className="py-12 text-center border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                               <Coins size={20} className="text-white/10" />
+                            </div>
+                            <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">No active listings in this nebula</p>
+                         </div>
+                       )}
+                       {marketOrders.map(order => (
+                         <div key={order.id} className={`bg-white/[0.03] rounded-2xl p-5 border border-white/5 transition-all flex items-center justify-between group relative overflow-hidden ${
+                            order.currency === 'BTC' ? 'hover:border-orange-500/30' : 
+                            order.currency === 'ETH' ? 'hover:border-blue-500/30' : 
+                            'hover:border-indigo-500/30'
+                         }`}>
+                            <div className={`absolute top-0 left-0 w-1 h-full bg-indigo-500/20 group-hover:bg-indigo-500 transition-colors ${
+                                order.currency === 'BTC' ? 'bg-orange-500/20 group-hover:bg-orange-500' : 
+                                order.currency === 'ETH' ? 'bg-blue-500/20 group-hover:bg-blue-500' : 
+                                ''
+                            }`} />
+                            <div className="space-y-1">
+                               <p className="text-sm font-black text-white group-hover:text-indigo-100 transition-colors">
+                                  {ethers.formatUnits(order.aur_amount || order.aurAmount || "0", 18)} <span className="text-[10px] text-indigo-400 font-bold uppercase">AUR</span>
+                                </p>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-[10px] font-mono font-bold ${
+                                      order.currency === 'BTC' ? 'text-orange-400' : 
+                                      order.currency === 'ETH' ? 'text-blue-400' : 
+                                      'text-emerald-400'
+                                  }`}>
+                                    Price: {ethers.formatUnits(order.native_price || order.nativePrice || "0", 18)} {order.currency || 'NATIVE'}
+                                  </span>
+                                  <span className="text-[8px] font-mono text-white/20 uppercase">ID: #{order.id.toString().slice(-6)}</span>
+                                </div>
+                            </div>
+                            <button 
+                               disabled={isFulfilling !== null}
+                               onClick={() => handleBuyInternal(order.id, order.native_price || order.nativePrice, order.aur_amount || order.aurAmount)}
+                               className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 ${
+                                 isFulfilling === order.id ? 'bg-emerald-500/50 text-white/50 animate-pulse' : 'bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-emerald-500/20'
+                               }`}
+                             >
+                                {isFulfilling === order.id ? 'Buying...' : 'Buy Now'}
+                             </button>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 space-y-6 relative overflow-hidden mt-2">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[60px] rounded-full" />
+                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                      <ArrowUpRight size={14} /> List AUR for Sale
+                    </h4>
+                    
+                    <div className="space-y-4 relative">
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Quantity (AUR to Sell)</label>
+                          <input 
+                            value={sellOrderAmount}
+                            onChange={e => setSellOrderAmount(e.target.value)}
+                            type="number" 
+                            placeholder="0.00" 
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-emerald-500 transition-all text-indigo-100"
+                          />
+                       </div>
+                       
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Asking Price</label>
+                          <div className="flex gap-2">
+                            <input 
+                              value={sellOrderPrice}
+                              onChange={e => setSellOrderPrice(e.target.value)}
+                              type="number" 
+                              placeholder="0.00" 
+                              className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-emerald-500 transition-all text-emerald-400"
+                            />
+                            <select 
+                              value={sellOrderCurrency}
+                              onChange={(e: any) => setSellOrderCurrency(e.target.value)}
+                              className="bg-white/5 border border-white/10 rounded-2xl px-4 text-[10px] font-black text-white outline-none"
+                            >
+                               <option value="NATIVE">NATIVE</option>
+                               <option value="BTC">BTC</option>
+                               <option value="ETH">ETH</option>
+                            </select>
+                          </div>
+                       </div>
+
+                       <button 
+                        onClick={handlePlaceSellOrder}
+                        disabled={isPlacingOrder || !sellOrderAmount || !sellOrderPrice}
+                        className={`w-full py-5 font-black text-xs uppercase rounded-[1.5rem] transition-all relative group overflow-hidden ${
+                          isPlacingOrder || !sellOrderAmount || !sellOrderPrice
+                          ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                          : 'bg-white text-black hover:bg-neutral-200'
+                        }`}
+                       >
+                         <div className="relative z-10 flex items-center justify-center gap-2">
+                            {isPlacingOrder ? (
+                               <>
+                                 <RefreshCw size={14} className="animate-spin" /> 
+                                 Locking AUR in Escrow...
+                               </>
+                            ) : (
+                               <>
+                                 <Shield size={14} />
+                                 Lock & List AUR
+                               </>
+                            )}
+                         </div>
+                       </button>
+
+                       <div className="flex gap-4 items-center p-4 bg-indigo-500/5 rounded-[1.5rem] border border-indigo-500/10 mt-10">
+                          <div className="p-2 bg-indigo-500/10 rounded-lg">
+                             <Shield size={16} className="text-indigo-400" />
+                          </div>
+                          <p className="text-[10px] text-white/40 leading-relaxed italic">
+                            <span className="text-indigo-400 font-black not-italic">SOVEREIGN PROTOCOL:</span> 1% of AUR is automatically burned from the seller during fulfillment to maintain network scarcity.
+                          </p>
+                       </div>
+                    </div>
+                  </div>
+                  </div>
+                  ) : (
+                  /* Quantum Swap UI (AMM) */
+                  <div className="max-w-xl mx-auto py-10">
+                    <div className="glass-panel p-10 rounded-[3rem] border-white/5 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full" />
+                       
+                       <div className="space-y-8 relative z-10">
+                         <div className="flex justify-between items-center mb-4">
+                           <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                             <RefreshCw size={14} className="text-emerald-500" /> Quantum Swap (AMM)
+                           </h4>
+                           <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">1% Protocol Burn Applied</span>
+                         </div>
+
+                         {/* Pay Section */}
+                         <div className="p-8 bg-white/5 rounded-[2rem] border border-white/5 space-y-4">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-widest px-2">
+                               <span>I Want to Pay</span>
+                               <span>Bal: 
+                                 {swapFrom === 'AUR' ? ethers.formatUnits(balanceAtom, 18) : 
+                                  swapFrom === 'BTC' ? btcBalanceAtom : 
+                                  swapFrom === 'ETH' ? ethBalanceAtom : 
+                                  nativeBalanceAtom}
+                               </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                               <input 
+                                 value={swapAmount}
+                                 onChange={e => setSwapAmount(e.target.value)}
+                                 type="text" 
+                                 placeholder="0.00" 
+                                 className="flex-1 bg-transparent text-3xl font-black outline-none text-white placeholder:text-white/10"
+                               />
+                               <select 
+                                 value={swapFrom}
+                                 onChange={(e: any) => setSwapFrom(e.target.value)}
+                                 className="bg-white/10 border border-white/10 rounded-2xl px-4 py-2 text-xs font-black text-white hover:bg-white/20 transition-all outline-none"
+                               >
+                                 <option value="AUR">AUR</option>
+                                 <option value="BTC">BTC</option>
+                                 <option value="ETH">ETH</option>
+                                 <option value="NATIVE">NATIVE</option>
+                               </select>
+                            </div>
+                         </div>
+
+                         <div className="flex justify-center -my-6 relative z-20">
+                            <button onClick={() => {const temp = swapFrom; setSwapFrom(swapTo as any); setSwapTo(temp as any);}} className="w-12 h-12 bg-emerald-500 rounded-2xl shadow-[0_0_20px_#10b981] flex items-center justify-center text-black hover:scale-110 active:scale-95 transition-all">
+                               <RefreshCw size={20} />
+                            </button>
+                         </div>
+
+                         {/* Receive Section */}
+                         <div className="p-8 bg-black/40 rounded-[2rem] border border-white/5 space-y-4">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-widest px-2">
+                               <span>I will Receive (Est.)</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                               <div className="flex-1 text-3xl font-black text-emerald-400">
+                                  {swapAmount ? (parseFloat(swapAmount) * 0.99 * 0.001).toFixed(6) : "0.00"}
+                               </div>
+                               <select 
+                                 value={swapTo}
+                                 onChange={(e: any) => setSwapTo(e.target.value)}
+                                 className="bg-white/10 border border-white/10 rounded-2xl px-4 py-2 text-xs font-black text-white hover:bg-white/20 transition-all outline-none"
+                               >
+                                 <option value="BTC">BTC</option>
+                                 <option value="ETH">ETH</option>
+                                 <option value="AUR">AUR</option>
+                                 <option value="NATIVE">NATIVE</option>
+                               </select>
+                            </div>
+                         </div>
+
+                         <button 
+                           onClick={handleInstantSwap}
+                           disabled={!swapAmount || isSwapping}
+                           className="w-full py-6 bg-white text-black rounded-[2rem] font-black text-sm uppercase shadow-2xl hover:bg-neutral-200 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:bg-white/5 disabled:text-white/20"
+                         >
+                            {isSwapping ? <RefreshCw size={18} className="animate-spin" /> : <Zap size={18} fill="currentColor" />}
+                            {isSwapping ? 'Executing Protocol...' : 'Instant Swap Now'}
+                         </button>
+                       </div>
+                    </div>
+                  </div>
+                  )}
+                </div>
+              )}
                   <div className="space-y-6">
                     <div className="flex justify-between items-end">
                       <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Global Sell Listings</h4>
@@ -1497,58 +1781,92 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sidebar */}
+           {/* Sidebar - Sovereign Multi-Vault */}
           <div className="space-y-8">
-            <div className="glass-panel p-6 rounded-3xl space-y-6">
-              <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Protocol Resources</h3>
+            <div className="glass-panel p-8 rounded-[2.5rem] space-y-8 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all duration-700" />
               
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-white/60">
-                    <div className="p-2 bg-white/5 rounded-lg"><Cpu size={14} /></div>
-                    <span className="text-xs font-bold tracking-widest">CPU LOAD</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-green-400 uppercase">Minimal</span>
+              <div className="flex justify-between items-center">
+                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
+                   <Shield size={14} className="text-indigo-400" /> Sovereign Multi-Vault
+                </h3>
+              </div>
+              
+              <div className="space-y-6">
+                {/* BTC Asset Row */}
+                <div className="p-5 bg-orange-500/[0.03] rounded-3xl border border-orange-500/10 hover:border-orange-500/30 transition-all group/asset relative overflow-hidden">
+                   <div className="flex justify-between items-center relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400">
+                          <span className="font-black text-lg">₿</span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest">Bitcoin</p>
+                          <p className="text-lg font-black tracking-tight text-white">{btcBalanceAtom} <span className="text-[10px] text-white/20">BTC</span></p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                         <button className="p-2 hover:bg-orange-500/20 rounded-xl transition-all text-orange-400/40 hover:text-orange-400">
+                            <ArrowDownLeft size={16} />
+                         </button>
+                      </div>
+                   </div>
+                   <div className="mt-3 overflow-hidden transition-all max-h-0 group-hover/asset:max-h-20">
+                      <p className="text-[8px] font-mono text-orange-400/40 break-all bg-black/20 p-2 rounded-lg">{btcAddress}</p>
+                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-white/60">
-                    <div className="p-2 bg-white/5 rounded-lg"><Database size={14} /></div>
-                    <span className="text-xs font-bold tracking-widest">LEDGER</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-indigo-400 uppercase">Synced</span>
+
+                {/* ETH Asset Row */}
+                <div className="p-5 bg-blue-500/[0.03] rounded-3xl border border-blue-500/10 hover:border-blue-500/30 transition-all group/asset relative overflow-hidden">
+                   <div className="flex justify-between items-center relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400">
+                          <span className="font-black text-lg">Ξ</span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">Ethereum</p>
+                          <p className="text-lg font-black tracking-tight text-white">{ethBalanceAtom} <span className="text-[10px] text-white/20">ETH</span></p>
+                        </div>
+                      </div>
+                      <button className="p-2 hover:bg-blue-500/20 rounded-xl transition-all text-blue-400/40 hover:text-blue-400">
+                         <ArrowDownLeft size={16} />
+                      </button>
+                   </div>
+                   <div className="mt-3 overflow-hidden transition-all max-h-0 group-hover/asset:max-h-20">
+                      <p className="text-[8px] font-mono text-blue-400/40 break-all bg-black/20 p-2 rounded-lg">{ethAddress}</p>
+                   </div>
                 </div>
-                
-                <div className="h-px bg-white/5 my-2"></div>
-                <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                  <p className="text-[10px] text-white/30 uppercase font-bold mb-2">Network Energy Progress</p>
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-lg font-bold">
-                      {(() => {
-                        try { return ethers.formatUnits(dailyEmission || "0", 18); }
-                        catch { return "0.00"; }
-                      })()} 
-                      <span className="text-[10px] text-white/40"> AUR</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-bold">24H LIVE</span>
+
+                {/* AUR Asset Row */}
+                <div className="p-5 bg-indigo-500/[0.03] rounded-3xl border border-indigo-500/10 hover:border-indigo-500/30 transition-all group/asset relative overflow-hidden">
+                   <div className="flex justify-between items-center relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-400">
+                          <Coins size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-400/80 uppercase tracking-widest">Sovereign Aura</p>
+                          <p className="text-lg font-black tracking-tight text-white">
+                             {ethers.formatUnits(balanceAtom, 18)} <span className="text-[10px] text-white/20">AUR</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={() => setActiveModal('receive')} className="p-2 hover:bg-indigo-500/20 rounded-xl transition-all text-indigo-400/40 hover:text-indigo-400">
+                         <Copy size={16} />
+                      </button>
+                   </div>
+                </div>
+
+                {/* Native Resource */}
+                <div className="flex items-center justify-between px-2 pt-4 border-t border-white/5">
+                  <div className="flex items-center gap-3 text-white/60">
+                    <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><Zap size={14} /></div>
+                    <span className="text-[10px] font-bold tracking-widest uppercase">Internal Native</span>
                   </div>
-                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000 ease-out" 
-                      style={{ width: `${(() => {
-                        try {
-                          return Math.min((parseFloat(ethers.formatUnits(dailyEmission || "0", 18)) / 1.0) * 100, 100);
-                        } catch { return 0; }
-                      })()}%` }}
-                    ></div>
-                  </div>
+                  <span className="text-xs font-mono text-emerald-400 font-bold">{nativeBalanceAtom} <span className="text-[8px] opacity-40 italic">FUEL</span></span>
                 </div>
               </div>
             </div>
-
 
             <div className="glass-panel p-8 rounded-3xl bg-indigo-500/5 glow-border relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
