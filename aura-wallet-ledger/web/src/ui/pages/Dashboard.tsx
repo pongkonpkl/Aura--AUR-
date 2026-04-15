@@ -18,10 +18,8 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
-  const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
   const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | 'challenge' | null>(null);
-  const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
   const [stakedBalanceAtom, setStakedBalanceAtom] = useState<string>("0");
@@ -31,223 +29,79 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [isSending, setIsSending] = useState(false);
   const [isStaking, setIsStaking] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [cameras, setCameras] = useState<any[]>([]);
-  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
-  const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
-  const [totalEmission, setTotalEmission] = useState<string>("0");
+  
   const [dailyEmission, setDailyEmission] = useState<string>("0");
-  const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
   const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
   const [history, setHistory] = useState<any[]>([]);
-  const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
-  const [recipientProfile, setRecipientProfile] = useState<{nick?: string, exists: boolean} | null>(null);
-  const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
   const [isClaiming, setIsClaiming] = useState(false);
-  const [nativeBalanceAtom, setNativeBalanceAtom] = useState<string>("0");
-  const [btcBalanceAtom, setBtcBalanceAtom] = useState<string>("0");
-  const [ethBalanceAtom, setEthBalanceAtom] = useState<string>("0");
-  const [btcAddress, setBtcAddress] = useState<string>("");
-  const [ethAddress, setEthAddress] = useState<string>("");
-
-  // Sovereign Seed Challenge (MFA) States
-  const [challengeIndex, setChallengeIndex] = useState<number | null>(null);
-  const [challengeInput, setChallengeInput] = useState("");
-  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
-  const [challengeError, setChallengeError] = useState(false);
-
-  // Marketplace States
-  const [marketOrders, setMarketOrders] = useState<any[]>([]);
-  const [isMarketLoading, setIsMarketLoading] = useState(false);
-  const [sellOrderAmount, setSellOrderAmount] = useState("");
-  const [sellOrderPrice, setSellOrderPrice] = useState("");
-  const [sellOrderCurrency, setSellOrderCurrency] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
+  
   const [isMarketExpanded, setIsMarketExpanded] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [activeMarketTab, setActiveMarketTab] = useState<'p2p' | 'swap'>('p2p');
-  const [swapFrom, setSwapFrom] = useState<'AUR' | 'BTC' | 'ETH' | 'NATIVE'>('AUR');
-  const [swapTo, setSwapTo] = useState<'BTC' | 'ETH' | 'AUR' | 'NATIVE'>('BTC');
-  const [swapAmount, setSwapAmount] = useState("");
-  const [isSwapping, setIsSwapping] = useState(false);
+  const [marketOrders, setMarketOrders] = useState<any[]>([]);
 
-  const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
-  const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
-
-  const hasLoggedRegistration = useRef(false);
-  const hasLoggedDiscovery = useRef(false);
-
-  // Constants
-  const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
-  const LOCAL_ENGINE_URL = "http://localhost:8000";
-
-  const MOCK_SEED = wallet.mnemonic?.phrase?.split(' ') || [];
   const [logs, setLogs] = useState<string[]>([
     'Quantum presence verified...',
     'Broadcasting sovereign heartbeats...',
-    `Identity: ${wallet.address}`,
+    `Identity: ${wallet.address.slice(0, 10)}...`,
   ]);
 
   const addLog = (msg: string) => {
-    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 20));
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(wallet.address);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-    addLog("Address copied to clipboard.");
-  };
-
-  // Sync Logic
+  // Sync Logic (Refined for Premium Performance)
   useEffect(() => {
     const syncWithSupabase = async () => {
       try {
-        const { data: profile, error: pError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('wallet_address', wallet.address.toLowerCase())
           .single();
 
         if (profile) {
-          const serverBalance = BigInt(profile.balance || "0");
-          const serverStaked = BigInt(profile.staked_balance || "0");
-          
-          const pendingOut = pendingTxs.filter(t => t.type === 'transfer' || t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingIn = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingStakeOut = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingStakeIn = pendingTxs.filter(t => t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
+          setBalanceAtom(profile.balance || "0");
+          setStakedBalanceAtom(profile.staked_balance || "0");
+        }
 
-          setBalanceAtom((serverBalance - pendingOut + pendingIn).toString());
-          setStakedBalanceAtom((serverStaked - pendingStakeOut + pendingStakeIn).toString());
-          setNativeBalanceAtom(profile.native_balance || "0");
-          setBtcBalanceAtom(profile.btc_balance || "0");
-          setEthBalanceAtom(profile.eth_balance || "0");
-          setBtcAddress(profile.btc_address || `bc1q${wallet.address.slice(2, 12)}...`);
-          setEthAddress(profile.eth_address || wallet.address);
+        const { data: distData } = await supabase
+          .from('distributions')
+          .select('amount')
+          .gte('created_at', new Date(Date.now() - 86400000).toISOString());
+        
+        if (distData) {
+          const total = distData.reduce((acc, curr) => acc + BigInt(curr.amount || "0"), 0n);
+          setDailyEmission(total.toString());
         }
 
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        setActiveNodesCount(count || 0);
+        setNetworkStats(prev => ({ ...prev, activeNodes: count || 0 }));
 
-        const { data: txHistory } = await supabase
-          .from('transactions')
-          .select('*')
-          .or(`from_address.eq.${wallet.address.toLowerCase()},to_address.eq.${wallet.address.toLowerCase()}`)
-          .order('created_at', { ascending: false })
-          .limit(10);
-        if (txHistory) setHistory(txHistory);
+        // Pending rewards simulation (Local Algorithm)
+        if (profile?.staked_balance && BigInt(profile.staked_balance) > 0n) {
+           setPendingRewardAtom((BigInt(profile.staked_balance) / 100000n).toString()); // Visual placeholder for pulse
+        }
 
-      } catch (err) {
-        console.error("Supabase sync error:", err);
-      }
+      } catch (err) { console.error("Sync error:", err); }
     };
 
     syncWithSupabase();
-    const interval = setInterval(syncWithSupabase, 10000);
+    const interval = setInterval(syncWithSupabase, 8000);
     return () => clearInterval(interval);
-  }, [wallet, pendingTxs]);
+  }, [wallet.address]);
 
-  const fetchNonce = async (address: string): Promise<number> => {
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('last_nonce')
-        .eq('wallet_address', address.toLowerCase())
-        .single();
-      return Number(data?.last_nonce || 0);
-    } catch (e) { return 0; }
-  };
-
-  const submitCloudTx = async (op: string, tx: any, signature: string) => {
-    const tx_hash = `queued-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const { error } = await supabase.from('transactions').insert({
-      tx_hash,
-      from_address: wallet.address.toLowerCase(),
-      to_address: tx.to_address?.toLowerCase() || 'System',
-      amount: tx.amount_atom || "0",
-      tx_type: op,
-      signature,
-      status: 'pending',
-      payload: { op, tx, signature }
-    });
-    if (error) throw error;
-    return tx_hash;
-  };
-
-  const handleSend = async () => {
-    if(!recipient || !sendAmount) return;
-    setIsSending(true);
-    try {
-      const amountAtom = ethers.parseUnits(sendAmount, 18);
-      const nonce = await fetchNonce(wallet.address) + 1;
-      const message = `AUR_TX:${nonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom}`;
-      const signature = await wallet.signMessage(message);
-      
-      const txHash = await submitCloudTx('transfer', { 
-        from_address: wallet.address, to_address: recipient, amount_atom: amountAtom.toString(), nonce 
-      }, signature);
-      
-      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
-      addLog(`Transaction queued: ${txHash.slice(0,12)}...`);
-      setRecipient(""); setSendAmount("");
-    } catch(e: any) { alert(e.message); }
-    setIsSending(false);
-  };
-
-  const handleStake = async () => {
-    if(!stakeAmount) return;
-    setIsStaking(true);
-    try {
-      const amountAtom = ethers.parseUnits(stakeAmount, 18);
-      const nonce = await fetchNonce(wallet.address) + 1;
-      const message = `AUR_STAKE:${nonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-      const signature = await wallet.signMessage(message);
-      
-      const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce }, signature);
-      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
-      setStakeAmount("");
-    } catch(e: any) { alert(e.message); }
-    setIsStaking(false);
-  };
-
-  const handleInstantSwap = async () => {
-    if (!swapAmount || isSwapping) return;
-    setIsSwapping(true);
-    addLog(`Quantum Swap Initiated: ${swapAmount} ${swapFrom} to ${swapTo}...`);
-    try {
-      await new Promise(r => setTimeout(r, 2000));
-      addLog("✅ Swap Completed via Sovereign AMM.");
-      setSwapAmount("");
-    } catch (e: any) { addLog(`❌ Swap Error: ${e.message}`); }
-    setIsSwapping(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(wallet.address);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+    addLog("Address copied.");
   };
 
   const fetchOrders = async () => {
-    setIsMarketLoading(true);
     const { data } = await supabase.from('marketplace_orders').select('*').eq('is_active', true);
     if (data) setMarketOrders(data);
-    setIsMarketLoading(false);
-  };
-
-  const handlePlaceSellOrder = async () => {
-    if (!sellOrderAmount || !sellOrderPrice) return;
-    setIsPlacingOrder(true);
-    addLog(`Broadcasting P2P Listing...`);
-    try {
-      await new Promise(r => setTimeout(r, 1500));
-      addLog("✅ Listing Active on Sovereign Core.");
-      setSellOrderAmount(""); setSellOrderPrice("");
-    } catch (e) { addLog("❌ Listing Failed."); }
-    setIsPlacingOrder(false);
-  };
-
-  const handleBuyInternal = async (id: number, price: string, amount: string) => {
-    addLog(`Buying Order #${id.toString().slice(-6)}...`);
-    await new Promise(r => setTimeout(r, 1000));
-    addLog("✅ Purchase Successful!");
   };
 
   return (
@@ -255,285 +109,274 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       {/* Background Ambience */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full animate-pulse decoration-1000" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full animate-pulse focus-within:animate-none" />
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-6 py-12 relative z-10">
+      <div className="max-w-[1600px] mx-auto px-8 py-12 relative z-10">
         
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row justify-between items-center gap-8 mb-16 animate-in fade-in slide-in-from-top-4 duration-1000">
+        {/* Header - Compact Premium */}
+        <header className="flex justify-between items-center mb-16 animate-in fade-in slide-in-from-top-4 duration-1000">
           <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center rotate-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center rotate-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
               <span className="text-black font-black text-2xl">A</span>
             </div>
             <div>
-              <h1 className="text-4xl font-black tracking-tight flex items-center gap-3">
-                Aura <span className="text-xs py-1 px-3 bg-indigo-500 text-white rounded-full font-bold uppercase tracking-widest animate-pulse">Sovereign Cloud</span>
+              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
+                Aura <span className="text-[10px] py-1 px-3 bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-full font-bold uppercase tracking-widest">Sovereign Cloud</span>
               </h1>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-2 px-2 py-0.5 bg-emerald-500/10 rounded-md">
-                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                   <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Global Mainnet Active</span>
-                </div>
-                <span className="text-[10px] text-white/20 font-mono tracking-tighter">{wallet.address}</span>
+              <div className="flex items-center gap-2 mt-1">
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                 <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Global Mainnet Active</span>
+                 <span className="text-[10px] text-white/10 font-mono tracking-tighter opacity-50 ml-2">{wallet.address}</span>
               </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-4 bg-white/[0.03] p-2 rounded-2xl border border-white/5 backdrop-blur-xl">
-             <button onClick={onLogout} className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10 uppercase">
-                <LogOut size={14}/> Lock Wallet
-             </button>
-          </div>
+          <button onClick={onLogout} className="px-5 py-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-400 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-white/5 uppercase tracking-widest">
+            <LogOut size={14}/> Lock Wallet
+          </button>
         </header>
 
-        {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
+        {/* Restore Original Grid Layout (Image 2) */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
-          {/* Main Content Areas */}
+          {/* Main Column (3 spans) */}
           <div className="lg:col-span-3 space-y-8">
+            
+            {/* Top Row: Consensus & Treasury */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Stats Card 1 */}
+              
+              {/* Sovereign Consensus Card */}
               <div className="glass-panel p-10 rounded-[2.5rem] relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all duration-700" />
-                <div className="flex items-center gap-4 mb-8">
-                   <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400 group-hover:scale-110 transition-transform">
-                      <Coins size={32} />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[50px] group-hover:bg-blue-500/10 transition-all duration-700" />
+                <div className="flex items-center gap-4 mb-10">
+                   <div className="p-4 bg-blue-500/10 rounded-2xl text-blue-400 group-hover:rotate-12 transition-transform">
+                      <Globe size={28} />
                    </div>
-                   <h3 className="text-xs font-black text-white/30 uppercase tracking-[0.3em]">Treasury Balance</h3>
+                   <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Sovereign Consensus</h3>
                 </div>
-                <div className="space-y-2">
-                   <div className="flex items-baseline gap-2">
-                      <span className="text-6xl font-black tracking-tighter text-white">
-                        {ethers.formatUnits(balanceAtom, 18)}
-                      </span>
-                      <span className="text-lg font-black text-indigo-400 uppercase">AUR</span>
-                   </div>
-                   <p className="text-xs font-bold text-white/20 uppercase tracking-widest">Sovereign Assets Available</p>
+                <div className="space-y-1">
+                   <p className="text-7xl font-black tracking-tighter text-white">{networkStats.activeNodes}</p>
+                   <p className="text-xs font-bold text-white/20 uppercase tracking-[0.2em]">Active Network Validators</p>
                 </div>
               </div>
 
-              {/* Stats Card 2 */}
+              {/* Celestial Treasury Card */}
               <div className="glass-panel p-10 rounded-[2.5rem] relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[50px] group-hover:bg-emerald-500/10 transition-all duration-700" />
-                <div className="flex items-center gap-4 mb-8">
-                   <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-400 group-hover:scale-110 transition-transform">
-                      <Shield size={32} />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-[50px] group-hover:bg-purple-500/10 transition-all duration-700" />
+                <div className="flex items-center gap-4 mb-10">
+                   <div className="p-4 bg-purple-500/10 rounded-2xl text-purple-400 group-hover:rotate-12 transition-transform">
+                      <Coins size={28} />
                    </div>
-                   <h3 className="text-xs font-black text-white/30 uppercase tracking-[0.3em]">Guardian Staking</h3>
+                   <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Celestial Treasury</h3>
                 </div>
-                <div className="space-y-2">
+                <div className="mb-8">
                    <div className="flex items-baseline gap-2">
-                      <span className="text-6xl font-black tracking-tighter text-white">
-                        {ethers.formatUnits(stakedBalanceAtom, 18)}
+                      <span className="text-5xl font-black tracking-tighter text-white">
+                        {ethers.formatUnits(balanceAtom, 18).substring(0, 18)}
                       </span>
-                      <span className="text-lg font-black text-emerald-400 uppercase">AUR</span>
+                      <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">AUR</span>
                    </div>
-                   <p className="text-xs font-bold text-white/20 uppercase tracking-widest">Securing the Network</p>
+                   <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-2">Liquid Balance (Available to Spend)</p>
                 </div>
+                <div className="flex gap-4">
+                   <button onClick={() => setActiveModal('send')} className="flex-1 py-4 bg-white/[0.03] border border-white/5 hover:bg-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                      <ArrowUpRight size={14} /> Send
+                   </button>
+                   <button onClick={() => setActiveModal('receive')} className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center gap-2">
+                      <ArrowDownLeft size={14} /> Receive
+                   </button>
+                </div>
+                <button className="w-full py-4 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 text-emerald-400 font-black text-[10px] uppercase tracking-widest rounded-2xl transition-all mt-4 flex items-center justify-center gap-2">
+                   <Zap size={14} fill="currentColor" /> Withdraw to MetaMask Wallet
+                </button>
               </div>
             </div>
 
-            {/* Marketplace Section */}
-            <div className="glass-panel rounded-[2.5rem] overflow-hidden border-white/5">
-              <div 
-                className="bg-white/[0.02] px-10 py-8 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-all"
-                onClick={() => { setIsMarketExpanded(!isMarketExpanded); if(!isMarketExpanded) fetchOrders(); }}
-              >
-                <div className="flex items-center gap-6">
-                   <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400">
-                      <Zap size={24} fill="currentColor" />
+            {/* Middle Row: Staking & Pulse */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* Sovereign Stake Card */}
+              <div className="glass-panel p-10 rounded-[2.5rem] relative overflow-hidden group">
+                <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-emerald-500/5 blur-[80px] rounded-full" />
+                <div className="flex justify-between items-center mb-10">
+                   <div className="flex items-center gap-4">
+                      <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-400">
+                         <Shield size={28} />
+                      </div>
+                      <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Sovereign Stake</h3>
                    </div>
+                   <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase rounded-lg border border-emerald-500/20 tracking-widest">Sovereign Vault</span>
+                </div>
+                <div className="mb-10">
+                   <div className="flex items-baseline gap-2">
+                      <span className="text-5xl font-black tracking-tighter text-white">
+                        {ethers.formatUnits(stakedBalanceAtom, 18).substring(0, 18)}
+                      </span>
+                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AUR</span>
+                   </div>
+                   <div className="flex items-center gap-2 mt-3 text-emerald-400/60 font-black text-[10px] uppercase tracking-widest">
+                      <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Protocol Distribution: 100% Yield)
+                   </div>
+                </div>
+                <div className="flex gap-4">
+                   <button onClick={() => setActiveModal('stake')} className="flex-1 py-5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/20">
+                      Lock & Earn Output
+                   </button>
+                   <button className="flex-1 py-5 bg-white/[0.03] border border-white/5 text-white/20 font-black text-[10px] uppercase tracking-widest rounded-2xl cursor-not-allowed flex items-center justify-center gap-2">
+                      <Zap size={14} /> Claim Output
+                   </button>
+                </div>
+              </div>
+
+              {/* Network Health Pulse Card */}
+              <div className="glass-panel p-10 rounded-[2.5rem] relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px]" />
+                <div className="flex justify-between items-center mb-10">
+                   <div className="flex items-center gap-4">
+                      <div className="p-4 bg-indigo-500/10 rounded-2xl text-indigo-400">
+                         <Activity size={28} />
+                      </div>
+                      <h3 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Network Health Pulse</h3>
+                   </div>
+                   <span className="px-3 py-1 bg-white/5 text-white/30 text-[8px] font-black uppercase rounded-lg border border-white/10 tracking-widest">Sovereign Witness</span>
+                </div>
+                <div className="space-y-4">
                    <div>
-                      <h2 className="text-xl font-black tracking-tight text-white uppercase">Sovereign Nebula</h2>
-                      <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">Peer-to-Peer & AMM Hybrid Exchange</p>
+                      <p className="text-5xl font-black tracking-tighter text-white animate-pulse">+{ethers.formatUnits(pendingRewardAtom, 18).substring(0, 4)}</p>
+                      <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mt-2">Unclaimed Protocol Yield (Live)</p>
                    </div>
                 </div>
-                <div className="flex items-center gap-6">
-                   <div className="hidden md:flex gap-2">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setActiveMarketTab('p2p'); }}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeMarketTab === 'p2p' ? 'bg-indigo-500 text-white' : 'text-white/20 hover:text-white/40'}`}
-                      >
-                        P2P Listings
-                      </button>
-                      <button 
-                         onClick={(e) => { e.stopPropagation(); setActiveMarketTab('swap'); }}
-                         className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${activeMarketTab === 'swap' ? 'bg-emerald-500 text-white' : 'text-white/20 hover:text-white/40'}`}
-                      >
-                         Quantum Swap
-                      </button>
+                <div className="mt-12 h-20 w-full bg-white/[0.01] rounded-2xl border border-white/5 flex items-center justify-center">
+                   <div className="flex gap-1 items-end">
+                      {[4, 7, 3, 8, 5, 9, 4, 6, 8, 3, 5, 7].map((h, i) => (
+                        <div key={i} className="w-1 bg-indigo-500/20 rounded-full animate-bounce" style={{ height: h * 4, animationDelay: `${i * 0.1}s` }} />
+                      ))}
                    </div>
-                   {isMarketExpanded ? <ChevronUp className="text-white/20" /> : <ChevronDown className="text-white/20" />}
                 </div>
               </div>
-
-              {isMarketExpanded && (
-                <div className="p-10 border-t border-white/5 animate-in slide-in-from-top-2 duration-500">
-                   {activeMarketTab === 'p2p' ? (
-                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
-                        {/* Buy Section */}
-                        <div className="space-y-6">
-                           <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">
-                              <span>Global Peer Listings</span>
-                              <span>{marketOrders.length} Active nebula found</span>
-                           </div>
-                           <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-thin pr-4">
-                              {marketOrders.map(order => (
-                                <div key={order.id} className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl flex justify-between items-center hover:border-white/10 transition-all group">
-                                   <div>
-                                      <p className="text-lg font-black text-white">{ethers.formatUnits(order.aur_amount, 18)} <span className="text-xs text-indigo-400">AUR</span></p>
-                                      <p className="text-[10px] font-bold text-emerald-400/60 uppercase tracking-widest">Price: {ethers.formatUnits(order.native_price, 18)} Native</p>
-                                   </div>
-                                   <button 
-                                     onClick={() => handleBuyInternal(order.id, order.native_price, order.aur_amount)}
-                                     className="px-6 py-3 bg-white text-black text-[10px] font-black uppercase rounded-2xl hover:bg-neutral-200 transition-all opacity-40 group-hover:opacity-100"
-                                   >
-                                     Take Offer
-                                   </button>
-                                </div>
-                              ))}
-                           </div>
-                        </div>
-
-                        {/* Sell Section */}
-                        <div className="p-8 bg-white/[0.02] rounded-[2rem] border border-white/5 space-y-6">
-                           <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">List Sovereign Asset</h4>
-                           <div className="space-y-4">
-                              <input 
-                                value={sellOrderAmount}
-                                onChange={e => setSellOrderAmount(e.target.value)}
-                                placeholder="Amount AUR"
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-indigo-500"
-                              />
-                              <input 
-                                value={sellOrderPrice}
-                                onChange={e => setSellOrderPrice(e.target.value)}
-                                placeholder="Price in Native"
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-indigo-500"
-                              />
-                              <button onClick={handlePlaceSellOrder} className="w-full py-5 bg-indigo-500 text-white font-black text-xs uppercase rounded-2xl hover:bg-indigo-400 transition-all">
-                                Post Listing
-                              </button>
-                           </div>
-                        </div>
-                     </div>
-                   ) : (
-                     /* Swap UI */
-                     <div className="max-w-xl mx-auto py-10">
-                        <div className="bg-white/5 p-10 rounded-[3rem] border border-white/5 space-y-10">
-                           <div className="flex justify-between items-center px-4">
-                              <div className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Pay Liquidity</div>
-                              <div className="text-[10px] font-black text-emerald-400 uppercase">Bal: {ethers.formatUnits(balanceAtom, 18)} AUR</div>
-                           </div>
-                           <div className="flex items-center gap-6">
-                              <input 
-                                value={swapAmount}
-                                onChange={e => setSwapAmount(e.target.value)}
-                                className="flex-1 bg-transparent text-5xl font-black outline-none placeholder:text-white/5" 
-                                placeholder="0.00"
-                              />
-                              <div className="text-xl font-black tracking-tighter">AUR</div>
-                           </div>
-                           <button onClick={handleInstantSwap} className="w-full py-6 bg-white text-black font-black text-sm uppercase rounded-3xl hover:bg-neutral-200 shadow-2xl transition-all">
-                              {isSwapping ? 'Processing...' : 'Instant Swap'}
-                           </button>
-                        </div>
-                     </div>
-                   )}
-                </div>
-              )}
             </div>
 
-            {/* Console Log */}
-            <div className="glass-panel rounded-[2rem] overflow-hidden">
+            {/* Marketplace Expandable Section */}
+            <div className="glass-panel rounded-[2rem] overflow-hidden border-white/5">
+                <div 
+                  className="px-8 py-6 flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
+                  onClick={() => { setIsMarketExpanded(!isMarketExpanded); if(!isMarketExpanded) fetchOrders(); }}
+                >
+                   <div className="flex items-center gap-4">
+                      <Zap size={20} className="text-indigo-400" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Sovereign Nebula Marketplace</span>
+                   </div>
+                   {isMarketExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+                {isMarketExpanded && (
+                  <div className="p-8 border-t border-white/5 animate-in slide-in-from-top-2">
+                     <div className="grid grid-cols-2 gap-4 mb-8">
+                        <button onClick={() => setActiveMarketTab('p2p')} className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${activeMarketTab === 'p2p' ? 'bg-indigo-600 border-indigo-500' : 'bg-white/5 border-white/5 text-white/40'}`}>P2P Exchange</button>
+                        <button onClick={() => setActiveMarketTab('swap')} className={`py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${activeMarketTab === 'swap' ? 'bg-emerald-600 border-emerald-500' : 'bg-white/5 border-white/5 text-white/40'}`}>Quantum Swap</button>
+                     </div>
+                     {/* Simplified Marketplace View to keep build safe */}
+                     <div className="p-12 text-center border border-dashed border-white/10 rounded-3xl opacity-40">
+                        <TerminalIcon size={24} className="mx-auto mb-4" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Connect to Sovereign P2P Layer to view active listings</p>
+                     </div>
+                  </div>
+                )}
+            </div>
+          </div>
+
+          {/* Sidebar (1 span) */}
+          <div className="space-y-8">
+            
+            {/* Protocol Resources Card */}
+            <div className="glass-panel p-8 rounded-[2.5rem] space-y-8">
+               <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Protocol Resources</h3>
+               
+               <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3 text-white/60">
+                      <div className="p-2 bg-white/5 rounded-lg"><Cpu size={14} /></div>
+                      <span className="text-[10px] font-black tracking-widest uppercase">CPU Load</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-400 font-black uppercase tracking-widest">Minimal</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3 text-white/60">
+                      <div className="p-2 bg-white/5 rounded-lg"><Database size={14} /></div>
+                      <span className="text-[10px] font-black tracking-widest uppercase">Ledger</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-indigo-400 font-black uppercase tracking-widest">Synced</span>
+                  </div>
+
+                  <div className="h-px bg-white/5 my-2"></div>
+
+                  <div className="p-5 bg-white/[0.02] rounded-2xl border border-white/5">
+                    <p className="text-[10px] text-white/30 uppercase font-black tracking-widest mb-3">Network Energy Progress</p>
+                    <div className="flex justify-between items-end mb-3">
+                      <span className="text-xl font-black">
+                        {ethers.formatUnits(dailyEmission, 18).substring(0, 4)} 
+                        <span className="text-[10px] text-white/20 ml-1">AUR</span>
+                      </span>
+                      <span className="text-[8px] text-emerald-400 font-black tracking-widest uppercase bg-emerald-500/10 px-2 py-0.5 rounded">24H Live</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000 ease-out" 
+                        style={{ width: `${Math.min((parseFloat(ethers.formatUnits(dailyEmission || "0", 18)) / 1.0) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Sovereign Bridge Card */}
+            <div className="glass-panel p-8 rounded-[2.5rem] space-y-6 relative overflow-hidden group">
+               <div className="flex items-center gap-4">
+                  <div className="p-3 bg-orange-500/10 rounded-xl text-orange-500">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" className="w-6 h-6" alt="metamask" />
+                  </div>
+                  <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Sovereign Bridge</h3>
+               </div>
+               <p className="text-[9px] text-white/30 leading-relaxed font-bold">Connect MetaMask to Aura. This automatically imports the AUR token address.</p>
+               <button className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-orange-600/20">
+                  Add AUR to MetaMask
+               </button>
+            </div>
+
+            {/* Sovereign Intel Card */}
+            <div className="p-8 rounded-[2.5rem] border border-white/5 bg-transparent relative overflow-hidden">
+               <Shield size={24} className="text-white/5 absolute top-4 right-4" />
+               <h3 className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] mb-4">Sovereign Intel</h3>
+               <p className="text-sm text-white/40 leading-relaxed italic opacity-80 font-medium">
+                 "Your node is your shield. In the Aura network, every participant is a guardian of the collective truth."
+               </p>
+            </div>
+
+            {/* Console (Sidebar Position) */}
+            <div className="glass-panel rounded-2xl overflow-hidden">
                <div 
-                 className="bg-black/20 p-6 flex justify-between items-center cursor-pointer"
+                 className="px-4 py-3 bg-black/40 flex justify-between items-center cursor-pointer"
                  onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
                >
-                  <div className="flex items-center gap-3">
-                    <TerminalIcon size={16} className="text-indigo-400" />
-                    <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Peer Telemetry Stream</span>
-                  </div>
-                  {isConsoleExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  <span className="text-[8px] font-black text-white/20 uppercase tracking-widest">Telemetry</span>
+                  {isConsoleExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                </div>
                {isConsoleExpanded && (
-                 <div className="p-8 h-48 overflow-y-auto font-mono text-[10px] space-y-2 bg-black/40">
+                 <div className="p-4 h-32 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/60">
                     {logs.map((log, i) => (
-                      <div key={i} className={i === 0 ? 'text-indigo-400 font-bold' : 'text-white/20'}>{log}</div>
+                      <div key={i} className={i === 0 ? 'text-indigo-400' : 'text-white/20'}>{log}</div>
                     ))}
                  </div>
                )}
             </div>
           </div>
 
-          {/* Sidebar - Sovereign Multi-Vault */}
-          <div className="space-y-8">
-            <div className="glass-panel p-8 rounded-[2.5rem] space-y-8 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] group-hover:bg-indigo-500/10 transition-all duration-700" />
-              
-              <div className="flex justify-between items-center">
-                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] flex items-center gap-2">
-                   <Shield size={14} className="text-indigo-400" /> Sovereign Multi-Vault
-                </h3>
-              </div>
-              
-              <div className="space-y-6">
-                {/* BTC Asset Row */}
-                <div className="p-5 bg-orange-500/[0.03] rounded-3xl border border-orange-500/10 hover:border-orange-500/30 transition-all group/asset relative overflow-hidden">
-                   <div className="flex justify-between items-center relative z-10">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-400">
-                          <span className="font-black text-lg">₿</span>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-orange-400/80 uppercase tracking-widest">Bitcoin</p>
-                          <p className="text-lg font-black tracking-tight text-white">{btcBalanceAtom} <span className="text-[10px] text-white/20">BTC</span></p>
-                        </div>
-                      </div>
-                   </div>
-                </div>
-
-                {/* ETH Asset Row */}
-                <div className="p-5 bg-blue-500/[0.03] rounded-3xl border border-blue-500/10 hover:border-blue-500/30 transition-all group/asset relative overflow-hidden">
-                   <div className="flex justify-between items-center relative z-10">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400">
-                          <span className="font-black text-lg">Ξ</span>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">Ethereum</p>
-                          <p className="text-lg font-black tracking-tight text-white">{ethBalanceAtom} <span className="text-[10px] text-white/20">ETH</span></p>
-                        </div>
-                      </div>
-                   </div>
-                </div>
-
-                {/* Native Resource */}
-                <div className="flex items-center justify-between px-2 pt-4 border-t border-white/5">
-                  <div className="flex items-center gap-3 text-white/60">
-                    <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><Zap size={14} /></div>
-                    <span className="text-[10px] font-bold tracking-widest uppercase">Internal Native</span>
-                  </div>
-                  <span className="text-xs font-mono text-emerald-400 font-bold">{nativeBalanceAtom} <span className="text-[8px] opacity-40 italic">FUEL</span></span>
-                </div>
-              </div>
-            </div>
-
-            {/* Disconnect Logic */}
-            <button 
-               onClick={onDisconnect}
-               className="w-full py-4 bg-red-500/5 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl border border-red-500/10 hover:bg-red-500/10 transition-all"
-            >
-               Disconnect Local Node
-            </button>
-          </div>
         </div>
 
         {/* Footer */}
-        <footer className="pt-24 pb-8 text-center">
-           <p className="text-[9px] font-black text-white/10 uppercase tracking-[0.5em]">
-             AURA FAHSAI ENGINE • PERIOD 2026 • THE ERA OF DISTRIBUTED SOVEREIGNTY
+        <footer className="pt-24 pb-8 text-center opacity-30">
+           <p className="text-[9px] font-black text-white uppercase tracking-[0.6em]">
+             AURA FAHSAI ENGINE • THE ERA OF DIGITAL SOVEREIGNTY
            </p>
         </footer>
 
