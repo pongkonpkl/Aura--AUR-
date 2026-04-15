@@ -31,8 +31,9 @@ async function pollPendingTransactions() {
         const { data: pendingTxs, error } = await supabase
             .from('transactions')
             .select('*')
-            .eq('status', 'pending')
-            .eq('tx_type', 'bridge_out');
+            .eq('status', 'success')
+            .eq('tx_type', 'bridge_out')
+            .is('tx_hash', null);
 
         if (error) {
             console.error("❌ Supabase Read Error:", error);
