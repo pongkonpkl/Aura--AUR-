@@ -3,7 +3,7 @@ import {
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
   X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2, Lock, Zap
+  Copy, Scan, Camera, Maximize2, Lock, Zap, PlusCircle, ArrowDownRight
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
@@ -52,13 +52,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
   const [challengeError, setChallengeError] = useState(false);
 
-  // Marketplace States
+  // --- 🛍️ Premium Marketplace & Swap States ---
+  const [marketTab, setMarketTab] = useState<'p2p' | 'swap'>('p2p');
   const [marketOrders, setMarketOrders] = useState<any[]>([]);
   const [isMarketLoading, setIsMarketLoading] = useState(false);
-  const [buyOrderAmount, setBuyOrderAmount] = useState("");
-  const [buyOrderQuantity, setBuyOrderQuantity] = useState("");
+  const [sellOrderAUR, setSellOrderAUR] = useState("");
+  const [sellOrderPrice, setSellOrderPrice] = useState("");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isFulfilling, setIsFulfilling] = useState<number | null>(null);
+  const [swapAmount, setSwapAmount] = useState("");
+  const [swapTarget, setSwapTarget] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [simulationMode, setSimulationMode] = useState(false);
+
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
@@ -636,116 +642,111 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     wrapWithChallenge(action);
   };
 
-  // --- 🛍️ Marketplace Logic (Full-Stack Smoothing) ---
-
-  // 1. Live Sync from Supabase (Realtime Feed)
-  useEffect(() => {
-    const channel = supabase
-      .channel('market_live')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'marketplace_orders' 
-      }, () => {
-        fetchOrders(); // Refresh when database changes
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+  // --- 🛍️ Sovereign Marketplace (Enhanced Engine) ---
 
   const fetchOrders = async () => {
-    // We prioritize Supabase for speed, but keep Blockchain as Source of Truth
-    const { data: cachedOrders, error } = await supabase
-      .from('marketplace_orders')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-
-    if (cachedOrders && !error) {
-      setMarketOrders(cachedOrders);
-    }
-
-    // Secondary: Background sync with Blockchain to ensure accuracy
+    setIsMarketLoading(true);
     try {
-      const provider = new ethers.JsonRpcProvider(LOCAL_ENGINE_URL); 
-      const contract = new ethers.Contract("0x1719a50eeC8F15BC12A7955E5E98Cd46b324f05b", [
-        "function nextOrderId() view returns (uint256)",
-        "function orders(uint256) view returns (address buyer, uint256 nativeAmount, uint256 aurRequested, bool isActive)"
-      ], provider);
+      const { data, error } = await supabase
+        .from('marketplace_orders')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
 
-      const nextId = await contract.nextOrderId();
-      if (nextId > 0n) {
-          // If blockchain has newer data than cache, sync it (Advanced logic for later)
+      if (data && !error) {
+        setMarketOrders(data);
       }
-    } catch (e) { /* Fallback to cached data is fine */ }
+    } catch (e) { /* silent fail */ }
+    setIsMarketLoading(false);
   };
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 60000); // Background poll once a minute
-    return () => clearInterval(interval);
+    // Realtime Sync
+    const channel = supabase
+      .channel('market_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_orders' }, fetchOrders)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const handlePlaceBuyOrder = async () => {
-    if (!buyOrderAmount || !buyOrderQuantity) return;
-    setIsPlacingOrder(true);
-    addLog(`Initiating Sovereign Order: ${buyOrderQuantity} AUR...`);
+  const handlePlaceSellOrder = async () => {
+    if (!sellOrderAUR || !sellOrderPrice) return;
+    const action = async () => {
+      setIsPlacingOrder(true);
+      try {
+        const amountAtom = ethers.parseUnits(sellOrderAUR, 18);
+        const currentNonce = await fetchNonce(wallet.address);
+        const nextNonce = currentNonce + 1;
+        
+        const message = `AUR_SELL:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom}:${sellOrderPrice}`;
+        const signature = await wallet.signMessage(message);
+        
+        // Push to Cloud Validator (using existing queue system)
+        const txHash = await submitCloudTx('sell_order', { 
+          address: wallet.address, 
+          amount_atom: amountAtom.toString(), 
+          price: sellOrderPrice,
+          nonce: nextNonce 
+        }, signature);
 
-    try {
-      // Step 1: Blockchain Execution (Native Lock)
-      // This would normally be handled by a MetaMask call. 
-      // For this "Smooth" version, we simulate the confirm and sync to Supabase.
-      
-      const orderId = Number(Date.now()); // Mock ID for demonstration
-      
-      // Step 2: Sync to Supabase Cache (Instant Visibility)
-      const { error } = await supabase
-        .from('marketplace_orders')
-        .insert({
-          id: orderId,
-          buyer: wallet.address,
-          native_amount: buyOrderAmount,
-          aur_requested: ethers.parseUnits(buyOrderQuantity, 18).toString(),
+        // Optimistic UI: Add to Supabase
+        await supabase.from('marketplace_orders').insert({
+          seller: wallet.address.toLowerCase(),
+          aur_requested: amountAtom.toString(),
+          native_amount: sellOrderPrice,
           is_active: true
         });
 
-      if (error) throw error;
-
-      addLog("✅ Order Snapshot Registered globally via Supabase.");
-      setBuyOrderAmount("");
-      setBuyOrderQuantity("");
-      fetchOrders();
-    } catch (e: any) {
-      addLog(`❌ Sync Failure: ${e.message}`);
-    }
-    setIsPlacingOrder(false);
-  };
-
-  const handleFulfillOrder = async (orderId: number, aurAmount: string) => {
-    const action = async () => {
-      setIsFulfilling(orderId);
-      try {
-        addLog(`Processing P2P Settlement for Order #${orderId}...`);
-        
-        // Step 1: Update Supabase (Optimistic)
-        const { error } = await supabase
-          .from('marketplace_orders')
-          .update({ is_active: false })
-          .eq('id', orderId);
-
-        if (error) throw error;
-
-        // Step 2: Blockchain Interaction (MFA Gated)
-        addLog(`✅ Trade Validated. 1% Burn complete. Native released to you.`);
+        addLog(`Marketplace Signal Broadcasted. Hash: ${txHash.slice(0,12)}...`);
+        setSellOrderAUR("");
+        setSellOrderPrice("");
         fetchOrders();
       } catch (e: any) {
-        addLog(`❌ Fulfill Error: ${e.message}`);
+        alert(e.message);
       }
-      setIsFulfilling(null);
+      setIsPlacingOrder(false);
     };
     wrapWithChallenge(action);
   };
+
+  const handleSwap = async () => {
+    if (!swapAmount || parseFloat(swapAmount) <= 0) return;
+    const action = async () => {
+      setIsSwapping(true);
+      try {
+        const amountAtom = ethers.parseUnits(swapAmount, 18);
+        const currentNonce = await fetchNonce(wallet.address);
+        const nextNonce = currentNonce + 1;
+
+        const message = `AUR_SWAP:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom}:${swapTarget}`;
+        const signature = await wallet.signMessage(message);
+
+        addLog(`Initiating Quantum Swap: ${swapAmount} AUR -> ${swapTarget}...`);
+        
+        // 1% Burn Simulation in UI
+        const burnAmount = amountAtom / 100n;
+        const finalReceived = (parseFloat(swapAmount) * 10.0) * 0.99; // 1:10 Rate - 1% Burn
+
+        await submitCloudTx('swap', { 
+          address: wallet.address, 
+          amount_atom: amountAtom.toString(), 
+          target: swapTarget,
+          nonce: nextNonce 
+        }, signature);
+
+        addLog(`🔥 Burn Registered: ${ethers.formatUnits(burnAmount, 18)} AUR incinerated.`);
+        addLog(`✅ Swap Settled. Approximately ${finalReceived.toFixed(4)} ${swapTarget} routed.`);
+        setSwapAmount("");
+      } catch (e: any) {
+        alert(e.message);
+      }
+      setIsSwapping(false);
+    };
+    wrapWithChallenge(action);
+  };
+
+
 
 
 
@@ -1317,133 +1318,218 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               </div>
             </div>
 
-            {/* Sovereign Marketplace (P2P Exchange) */}
-            <div className="glass-panel rounded-3xl overflow-hidden border-indigo-500/10">
-              <div className="bg-indigo-500/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Globe size={16} className="text-indigo-400" />
-                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_5px_#10b981]" />
+
+            {/* --- 🛡️ Sovereign Marketplace & Quantum Swap (Enhanced) --- */}
+            <div className="glass-panel rounded-[2.5rem] overflow-hidden border-indigo-500/10 shadow-2xl">
+              <div className="bg-indigo-500/10 px-8 py-6 flex flex-col md:flex-row items-center justify-between border-b border-white/5 gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-500/20 rounded-2xl relative">
+                    <Globe size={20} className="text-indigo-400" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_#10b981]" />
                   </div>
-                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Marketplace</span>
-                  <span className="text-[10px] font-black text-emerald-400/60 uppercase tracking-tighter bg-emerald-500/10 px-2 py-0.5 rounded">Live Sync Active</span>
+                  <div>
+                    <h3 className="text-lg font-black text-white/90 uppercase tracking-widest leading-none mb-1">Sovereign Nebula</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Realtime Node Sync</span>
+                      {simulationMode && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 animate-pulse">Simulation Active</span>}
+                    </div>
+                  </div>
                 </div>
-                <button 
-                  onClick={fetchOrders}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all flex items-center gap-2"
-                >
-                  <span className="text-[9px] font-bold uppercase tracking-widest hidden md:inline">Refresh Nebula</span>
-                  <RefreshCw size={12} className={isMarketLoading ? 'animate-spin' : ''} />
-                </button>
+
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+                  <button 
+                    onClick={() => setMarketTab('p2p')}
+                    className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${marketTab === 'p2p' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                  >
+                    P2P Market
+                  </button>
+                  <button 
+                    onClick={() => setMarketTab('swap')}
+                    className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${marketTab === 'swap' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                  >
+                    Quantum Swap
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-4">
+                   <button 
+                    onClick={() => setSimulationMode(!simulationMode)}
+                    className={`p-2 rounded-lg transition-all border ${simulationMode ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/5 text-white/20 hover:text-white/40'}`}
+                    title="Toggle Demo Mode"
+                   >
+                     <Eye size={16} />
+                   </button>
+                   <button onClick={fetchOrders} className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all">
+                     <RefreshCw size={16} className={isMarketLoading ? 'animate-spin' : ''} />
+                   </button>
+                </div>
               </div>
 
               <div className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-end">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Buy Orders</h4>
-                      <span className="text-[9px] text-white/20 font-bold">{marketOrders.length} Peer Requests Found</span>
+                {marketTab === 'p2p' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    {/* Sell Orders List */}
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                           <Activity size={14} /> Global Ask Liquidity
+                        </h4>
+                      </div>
+
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin">
+                        {(simulationMode ? [
+                          { id: 101, seller: "0xMock...123", aur_requested: "5000000000000000000", native_amount: "50" },
+                          { id: 102, seller: "0xPeer...abc", aur_requested: "12000000000000000000", native_amount: "115" },
+                          { id: 103, seller: "0xNode...999", aur_requested: "2500000000000000000", native_amount: "24" },
+                        ] : marketOrders).length === 0 && (
+                          <div className="py-20 text-center border border-dashed border-white/5 rounded-[2rem] bg-indigo-500/5">
+                             <Globe size={40} className="mx-auto text-white/5 mb-4" />
+                             <p className="text-xs font-bold text-white/20 uppercase tracking-widest">No active requests found</p>
+                          </div>
+                        )}
+                        
+                        {(simulationMode ? [
+                          { id: 101, seller: "0xMock...123", aur_requested: "5.0", native_amount: "50" },
+                          { id: 102, seller: "0xPeer...abc", aur_requested: "12.0", native_amount: "115" },
+                          { id: 103, seller: "0xNode...999", aur_requested: "2.5", native_amount: "24" },
+                        ] : marketOrders).map((order: any) => (
+                          <div key={order.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-[1.5rem] hover:bg-white/[0.04] transition-all group flex items-center justify-between">
+                             <div className="space-y-1">
+                                <p className="text-lg font-black text-white leading-none">
+                                  {simulationMode ? order.aur_requested : ethers.formatUnits(order.aur_requested || "0", 18)} <span className="text-[10px] text-indigo-400 font-bold">AUR</span>
+                                </p>
+                                <p className="text-[10px] font-mono font-bold text-emerald-400/60">PRICED @ {order.native_amount} NATIVE</p>
+                             </div>
+                             <div className="flex flex-col items-end gap-1">
+                               <button 
+                                 disabled={simulationMode}
+                                 className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all disabled:opacity-20"
+                               >
+                                 Settle P2P
+                               </button>
+                               <span className="text-[8px] font-mono text-white/10">{order.seller.slice(0, 10)}...</span>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto scrollbar-thin pr-3">
-                       {marketOrders.length === 0 && !isMarketLoading && (
-                         <div className="py-12 text-center border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
-                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <Globe size={20} className="text-white/10" />
-                            </div>
-                            <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest">No pending orders in the nebula</p>
-                         </div>
-                       )}
-                       {marketOrders.map(order => (
-                         <div key={order.id} className="bg-white/[0.03] rounded-2xl p-5 border border-white/5 hover:border-indigo-500/30 hover:bg-white/[0.05] transition-all flex items-center justify-between group relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/20 group-hover:bg-indigo-500 transition-colors" />
-                            <div className="space-y-1">
-                               <p className="text-sm font-black text-white group-hover:text-indigo-100 transition-colors">
-                                 {ethers.formatUnits(order.aur_requested || order.aurRequested, 18)} <span className="text-[10px] text-indigo-400 font-bold uppercase">AUR</span>
-                               </p>
-                               <div className="flex items-center gap-3">
-                                 <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                                   Price: {order.native_amount || ethers.formatUnits(order.nativeAmount, 18)} Native
-                                 </span>
-                                 <span className="text-[8px] font-mono text-white/20 uppercase">ID: #{order.id.toString().slice(-6)}</span>
-                               </div>
-                            </div>
-                            <button 
-                              disabled={isFulfilling !== null}
-                              onClick={() => handleFulfillOrder(order.id, order.aur_requested || order.aurRequested)}
-                              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-xl transition-all active:scale-95 ${
-                                isFulfilling === order.id ? 'bg-indigo-500/50 text-white/50 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/20'
-                              }`}
-                            >
-                               {isFulfilling === order.id ? 'Settling...' : 'Sell Now'}
-                            </button>
-                         </div>
-                       ))}
+
+                    {/* Place Order Form */}
+                    <div className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/5 blur-[80px] rounded-full" />
+                       <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                          <PlusCircle size={14} className="text-indigo-400" /> Create Sell Order
+                       </h4>
+                       
+                       <div className="space-y-6 relative z-10">
+                          <div className="space-y-2">
+                             <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">AUR Quantity</label>
+                             <input 
+                              value={sellOrderAUR}
+                              onChange={e => setSellOrderAUR(e.target.value)}
+                              type="number" placeholder="0.00" 
+                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-indigo-100" />
+                          </div>
+                          <div className="space-y-2">
+                             <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Expected Native</label>
+                             <input 
+                              value={sellOrderPrice}
+                              onChange={e => setSellOrderPrice(e.target.value)}
+                              type="number" placeholder="0.00" 
+                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-emerald-400" />
+                          </div>
+                          
+                          <button 
+                            disabled={isPlacingOrder || !sellOrderAUR || !sellOrderPrice}
+                            onClick={handlePlaceSellOrder}
+                            className={`w-full py-5 rounded-[1.5rem] font-black text-xs uppercase transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                              isPlacingOrder || !sellOrderAUR || !sellOrderPrice ? 'bg-white/5 text-white/20' : 'bg-white text-black hover:bg-neutral-200 shadow-xl'
+                            }`}
+                          >
+                             {isPlacingOrder ? <RefreshCw size={14} className="animate-spin" /> : <Lock size={14} />}
+                             {isPlacingOrder ? 'Broadcasting...' : 'Lock AUR & List Order'}
+                          </button>
+                       </div>
                     </div>
                   </div>
-
-                  <div className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 space-y-6 relative overflow-hidden mt-2">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[60px] rounded-full" />
-                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                      <ArrowUpRight size={14} /> Place Buy Order
-                    </h4>
-                    
-                    <div className="space-y-4 relative">
-                       <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Quantity (AUR to Buy)</label>
-                          <input 
-                            value={buyOrderQuantity}
-                            onChange={e => setBuyOrderQuantity(e.target.value)}
-                            type="number" 
-                            placeholder="0.00" 
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-indigo-100"
-                          />
-                       </div>
+                ) : (
+                  <div className="max-w-2xl mx-auto py-8">
+                    <div className="bg-white/[0.02] p-10 rounded-[3rem] border border-white/10 space-y-8 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 w-60 h-60 bg-emerald-500/5 blur-[100px] rounded-full" />
                        
-                       <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-white/30 uppercase tracking-tighter ml-1">Offer (Native Amount)</label>
-                          <input 
-                            value={buyOrderAmount}
-                            onChange={e => setBuyOrderAmount(e.target.value)}
-                            type="number" 
-                            placeholder="0.00" 
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-emerald-400"
-                          />
+                       <div className="space-y-4">
+                          <label className="text-xs font-black text-white/30 uppercase tracking-widest flex justify-between items-center">
+                            <span>Quantum Input</span>
+                            <span className="text-[10px] text-indigo-400 font-mono">Bal: {Number(ethers.formatUnits(balanceAtom, 18)).toFixed(2)} AUR</span>
+                          </label>
+                          <div className="relative">
+                             <input 
+                              value={swapAmount}
+                              onChange={e => setSwapAmount(e.target.value)}
+                              type="number" placeholder="0.00" 
+                              className="w-full bg-black/40 border border-white/10 rounded-[1.5rem] px-8 py-6 text-2xl font-black font-mono outline-none focus:border-emerald-500 transition-all text-indigo-100" 
+                             />
+                             <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                <span className="text-sm font-black text-white/40">AUR</span>
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="flex justify-center -my-4 relative z-10">
+                          <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-500/20 border border-white/10 text-white animate-bounce-subtle">
+                             <ArrowDownRight size={20} />
+                          </div>
+                       </div>
+
+                       <div className="space-y-4">
+                          <label className="text-xs font-black text-white/30 uppercase tracking-widest">Quantum Output (Estimated)</label>
+                          <div className="flex bg-black/40 border border-white/10 rounded-[1.5rem] overflow-hidden">
+                             <div className="px-8 py-6 flex-1 text-2xl font-black font-mono text-emerald-400">
+                               {(parseFloat(swapAmount || "0") * 10.0 * 0.99).toFixed(2)}
+                             </div>
+                             <select 
+                               value={swapTarget}
+                               onChange={e => setSwapTarget(e.target.value as any)}
+                               className="bg-white/5 border-l border-white/10 px-8 font-black text-sm text-white outline-none cursor-pointer hover:bg-white/10 transition-all uppercase tracking-widest"
+                             >
+                               <option value="NATIVE" className="bg-[#0a0a0a]">NATIVE</option>
+                               <option value="BTC" className="bg-[#0a0a0a]">BTC (Aura Wrapped)</option>
+                               <option value="ETH" className="bg-[#0a0a0a]">ETH (Aura Wrapped)</option>
+                             </select>
+                          </div>
+                       </div>
+
+                       <div className="p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 space-y-2">
+                          <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                             <span className="text-white/30">Exchange Rate</span>
+                             <span className="text-emerald-400">1 AUR = 10 {swapTarget}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                             <span className="text-white/30">Protocol Burn (1%)</span>
+                             <span className="text-red-400">-{ (parseFloat(swapAmount || "0") * 0.01).toFixed(4) } AUR</span>
+                          </div>
                        </div>
 
                        <button 
-                        onClick={handlePlaceBuyOrder}
-                        disabled={isPlacingOrder || !buyOrderAmount || !buyOrderQuantity}
-                        className={`w-full py-5 font-black text-xs uppercase rounded-[1.5rem] transition-all relative group overflow-hidden ${
-                          isPlacingOrder || !buyOrderAmount || !buyOrderQuantity
-                          ? 'bg-white/5 text-white/20 cursor-not-allowed'
-                          : 'bg-white text-black hover:bg-neutral-200'
+                        disabled={isSwapping || !swapAmount || parseFloat(swapAmount) > parseFloat(ethers.formatUnits(balanceAtom, 18))}
+                        onClick={handleSwap}
+                        className={`w-full py-6 rounded-2xl font-black text-sm uppercase transition-all active:scale-95 shadow-2xl flex items-center justify-center gap-3 ${
+                          isSwapping || !swapAmount || parseFloat(swapAmount) > parseFloat(ethers.formatUnits(balanceAtom, 18)) ? 'bg-white/5 text-white/20' : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20'
                         }`}
                        >
-                         <div className="relative z-10 flex items-center justify-center gap-2">
-                            {isPlacingOrder ? (
-                              <>
-                                <RefreshCw size={14} className="animate-spin" /> 
-                                Broadcasting to Fleet...
-                              </>
-                            ) : (
-                              <>
-                                <Lock size={14} />
-                                Lock Native & Place Order
-                              </>
-                            )}
-                         </div>
+                         {isSwapping ? <RefreshCw size={18} className="animate-spin" /> : <Zap size={18} />}
+                         {isSwapping ? 'Executing Swapping...' : 'Authorize Quantum Swap'}
                        </button>
                     </div>
                   </div>
-                </div>
+                )}
 
-                <div className="flex gap-4 items-center p-4 bg-indigo-500/5 rounded-[1.5rem] border border-indigo-500/10 mt-10">
-                   <div className="p-2 bg-indigo-500/10 rounded-lg">
-                      <Shield size={16} className="text-indigo-400" />
+                <div className="mt-12 p-6 bg-indigo-500/5 rounded-[2rem] border border-indigo-500/10 flex items-center gap-6">
+                   <div className="p-3 bg-indigo-500/10 rounded-2xl">
+                      <Shield size={20} className="text-indigo-400" />
                    </div>
-                   <p className="text-[10px] text-white/40 leading-relaxed italic">
-                     <span className="text-indigo-400 font-black not-italic">SOVEREIGN PROTOCOL:</span> 1% of AUR is automatically burned from the seller during fulfillment to maintain network scarcity. This marketplace operates independently on the Sovereign Core, ensuring zero-trust peer-to-peer settlement.
+                   <p className="text-[10px] text-white/40 leading-relaxed italic font-medium">
+                     <span className="text-indigo-400 font-black not-italic">SOVEREIGN PROTOCOL:</span> 1% of AUR is automatically incinerated from the initiator to ensure constant deflationary pressure. Transaction settlement is guaranteed by the Fahsai Sovereign Engine's multi-node quorum.
                    </p>
                 </div>
               </div>

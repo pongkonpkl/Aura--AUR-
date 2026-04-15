@@ -36,7 +36,6 @@ aura-cli/dist/
 
 # Wallet Private Data
 identity.json
-ledger.json
 nodes.json
 
 # Recursive Ignores
