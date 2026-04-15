@@ -107,9 +107,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       }, 3000);
     }, 2000);
   };
-  const [nativeBalance, setNativeBalance] = useState("100.00");
-  const [btcBalance, setBtcBalance] = useState("0.045");
-  const [ethBalance, setEthBalance] = useState("1.20");
+  const [nativeBalance, setNativeBalance] = useState("0.00");
+  const [btcBalance, setBtcBalance] = useState("0.000");
+  const [ethBalance, setEthBalance] = useState("0.00");
 
 
   const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
