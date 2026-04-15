@@ -17,6 +17,30 @@ interface DashboardProps {
   wallet: ethers.Wallet;
 }
 
+const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext }: any) => (
+  <div className="space-y-1">
+     {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest px-1">{label}</label>}
+     <div className="relative group">
+       <input 
+          type="number"
+          className="w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-4 text-xl font-mono font-bold text-white placeholder-white/20 focus:border-white/30 hover:border-white/20 outline-none transition-all pr-24"
+          placeholder="0.00"
+          step="any"
+          value={value}
+          onChange={onChange}
+       />
+       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-white flex items-center gap-1">{asset} <span className="text-[10px]">↕</span></span>
+     </div>
+     <div className="flex justify-between items-center px-1 pt-1">
+       <span className="text-[11px] text-white/50 font-medium">{subtext || `$0.00`}</span>
+       <div className="text-[11px] flex items-center gap-1.5">
+          <span className="text-white/50">{maxAvailable} {asset} available</span>
+          <button onClick={onSetMax} className="text-[#3b82f6] hover:text-blue-400 font-bold transition-all p-1">Max</button>
+       </div>
+     </div>
+  </div>
+);
+
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
@@ -1026,8 +1050,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               )}
 
               <div>
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Amount (AUR)</label>
-                <input value={sendAmount} onChange={e=>setSendAmount(e.target.value)} type="number" step="any" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 focus:border-indigo-500 outline-none transition-all font-bold" />
+                <SovereignInput 
+                  label="Amount to Transfer"
+                  value={sendAmount}
+                  onChange={(e: any) => setSendAmount(e.target.value)}
+                  asset="AUR"
+                  maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
+                  onSetMax={() => setSendAmount(ethers.formatUnits(balanceAtom, 18))}
+                />
               </div>
               <button disabled={isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
                 {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
@@ -1125,25 +1155,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                </div>
 
               <div>
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 flex justify-between">
-                  <span>Amount to {stakingTab === 'stake' ? 'Lock' : 'Unlock'} (AUR)</span>
-                  <span 
-                    className="text-indigo-400 cursor-pointer hover:text-indigo-300 font-mono" 
-                    onClick={() => {
+                <SovereignInput 
+                  label={stakingTab === 'stake' ? "Amount to Lock" : "Amount to Unlock"}
+                  value={stakeAmount}
+                  onChange={(e: any) => setStakeAmount(e.target.value)}
+                  asset="AUR"
+                  maxAvailable={Number(ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)).toFixed(4)}
+                  onSetMax={() => {
                         const rawAtom = stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom;
                         setStakeAmount(ethers.formatUnits(rawAtom, 18));
-                    }}
-                  >
-                    Max: {Number(ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)).toFixed(4)}
-                  </span>
-                </label>
-                <input 
-                  value={stakeAmount} 
-                  onChange={e=>setStakeAmount(e.target.value)} 
-                  type="number" 
-                  step="any"
-                  placeholder="0.00" 
-                  className={`w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none transition-all font-mono font-bold ${stakingTab === 'stake' ? 'focus:border-emerald-500' : 'focus:border-orange-500'}`} 
+                  }}
+                  subtext={stakingTab === 'stake' ? "Lock and yield rewards" : "Wait 3 days unbonding period"}
                 />
               </div>
               <button 
@@ -1290,22 +1312,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 </div>
 
                 <div className="space-y-2">
-                   <div className="flex justify-between">
-                     <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Withdrawal Amount</label>
-                     <span className="text-[10px] font-mono text-pink-400">Available: {activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance}</span>
-                   </div>
-                   <div className="relative">
-                     <input 
-                        type="number"
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xl font-mono text-white placeholder-white/20 focus:border-pink-500/50 outline-none transition-all pr-20"
-                        placeholder="0.00"
-                        step="0.01"
-                        value={withdrawAmountInput}
-                        onChange={(e) => setWithdrawAmountInput(e.target.value)}
-                     />
-                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-white/40">{activeWithdrawAsset}</span>
-                   </div>
-                   <p className="text-[10px] text-emerald-400 font-bold mt-2">Zero Sovereign Gas Protocol Applied.</p>
+                   <SovereignInput 
+                      label="Withdrawal Amount"
+                      value={withdrawAmountInput}
+                      onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
+                      asset={activeWithdrawAsset}
+                      maxAvailable={activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance}
+                      onSetMax={() => setWithdrawAmountInput(activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance)}
+                      subtext="Zero Sovereign Gas Protocol Applied."
+                   />
                 </div>
 
                 <button 
@@ -1674,20 +1689,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                        
                        <div className="space-y-6 relative z-10">
                           <div className="space-y-2">
-                             <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">AUR Quantity</label>
-                             <input 
-                              value={sellOrderAUR}
-                              onChange={e => setSellOrderAUR(e.target.value)}
-                              type="number" placeholder="0.00" 
-                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-indigo-100" />
+                             <SovereignInput 
+                                label="AUR Quantity to Sell"
+                                value={sellOrderAUR}
+                                onChange={(e: any) => setSellOrderAUR(e.target.value)}
+                                asset="AUR"
+                                maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
+                                onSetMax={() => setSellOrderAUR(ethers.formatUnits(balanceAtom, 18))}
+                                subtext={`1% Burn Protocol Applied to Sellers`}
+                             />
                           </div>
                           <div className="space-y-2">
-                             <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Expected Native</label>
-                             <input 
-                              value={sellOrderPrice}
-                              onChange={e => setSellOrderPrice(e.target.value)}
-                              type="number" placeholder="0.00" 
-                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-all text-emerald-400" />
+                             <SovereignInput 
+                                label="Price (Expected Native)"
+                                value={sellOrderPrice}
+                                onChange={(e: any) => setSellOrderPrice(e.target.value)}
+                                asset="NATIVE"
+                                maxAvailable="∞"
+                                onSetMax={() => setSellOrderPrice("100.00")}
+                                subtext={`You will receive ${sellOrderPrice || "0.00"} NATIVE`}
+                             />
                           </div>
                           
                           <button 
@@ -1709,21 +1730,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                        <div className="absolute top-0 right-0 w-60 h-60 bg-emerald-500/5 blur-[100px] rounded-full" />
                        
                        <div className="space-y-4">
-                          <label className="text-xs font-black text-white/30 uppercase tracking-widest flex justify-between items-center">
-                            <span>Quantum Input</span>
-                            <span className="text-[10px] text-indigo-400 font-mono">Bal: {Number(ethers.formatUnits(balanceAtom, 18)).toFixed(2)} AUR</span>
-                          </label>
-                          <div className="relative">
-                             <input 
-                              value={swapAmount}
-                              onChange={e => setSwapAmount(e.target.value)}
-                              type="number" placeholder="0.00" 
-                              className="w-full bg-black/40 border border-white/10 rounded-[1.5rem] px-8 py-6 text-2xl font-black font-mono outline-none focus:border-emerald-500 transition-all text-indigo-100" 
-                             />
-                             <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                <span className="text-sm font-black text-white/40">AUR</span>
-                             </div>
-                          </div>
+                          <SovereignInput 
+                             label="Quantum Input"
+                             value={swapAmount}
+                             onChange={(e: any) => setSwapAmount(e.target.value)}
+                             asset="AUR"
+                             maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
+                             onSetMax={() => setSwapAmount(ethers.formatUnits(balanceAtom, 18))}
+                             subtext={`Instant AMM Swap Route`}
+                          />
                        </div>
 
                        <div className="flex justify-center -my-4 relative z-10">
