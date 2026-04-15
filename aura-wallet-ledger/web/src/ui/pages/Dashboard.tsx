@@ -72,11 +72,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const getGatewayAddress = (asset: string) => {
     if (asset === 'NATIVE') return wallet.address;
     if (asset === 'BTC') {
-      // Mock derivation of a Bitcoin address from the Aura key
-      return `bc1q${wallet.address.toLowerCase().slice(2, 22)}aurachainv1`;
+      // Mock derivation of a Bitcoin address
+      return `bc1q${wallet.address.toLowerCase().slice(2, 22)}aura`;
     }
     if (asset === 'ETH') {
-      return `0xETH${wallet.address.slice(2, 12)}...MAINNET`;
+      // Aura is EVM-compatible, ETH gateway uses the exact same address format
+      return wallet.address;
     }
     return wallet.address;
   };
