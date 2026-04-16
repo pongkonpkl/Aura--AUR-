@@ -1997,7 +1997,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                         </div>
                      </div>
                      <div className="text-right">
+                      <div className="flex items-center gap-2 justify-end">
                         <p className="text-sm font-black text-blue-400 font-mono">{ethBalance}</p>
+                        {parseFloat(ethBalance) > 0 && (
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                            <Shield size={10} className="text-emerald-400" />
+                            <span className="text-[8px] font-black text-emerald-400 uppercase">Verified</span>
+                          </div>
+                        )}
+                      </div>
                         <p className="text-[8px] font-bold text-white/10 uppercase tracking-tighter">Aura Wrapped</p>
                      </div>
                   </div>
