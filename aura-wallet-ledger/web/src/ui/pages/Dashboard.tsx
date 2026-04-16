@@ -156,6 +156,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         console.error("Bridge Sync Error:", err);
         setDepositStep('idle');
         toast.error("Network Scan Interrupted.");
+    }
+  };
+
   const handleSimulateWithdraw = async () => {
     if (!withdrawAmountInput || !withdrawTargetInput) return toast.error("Provide Amount and Target Address");
     
