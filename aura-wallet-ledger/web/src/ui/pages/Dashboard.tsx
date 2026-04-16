@@ -95,6 +95,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [withdrawStep, setWithdrawStep] = useState<'idle' | 'processing' | 'confirming' | 'success'>('idle');
   const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [withdrawTargetInput, setWithdrawTargetInput] = useState("");
+  const [gasFeeEstimate, setGasFeeEstimate] = useState<string>("0.00");
+  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
+  const [activeBridgeTxId, setActiveBridgeTxId] = useState<string | null>(null);
 
   // --- 🛰️ Sovereign Bridge Utilities ---
   const getGatewayAddress = (asset: string) => {
@@ -170,42 +173,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     setWithdrawStep('processing');
     addLog(`Initiating Egress Protocol: Burning ${withdrawVal} ${activeWithdrawAsset}...`);
     
-    setTimeout(async () => {
-      setWithdrawStep('confirming');
-      addLog(`Relayer signing L1 transaction to ${withdrawTargetInput.slice(0, 8)}...`);
-      
-      // Hit Supabase Cloud
-      const { data, error } = await supabase.rpc('rpc_bridge_asset', {
-        p_wallet_address: wallet.address.toLowerCase(),
-        p_asset: activeWithdrawAsset,
-        p_amount: withdrawVal,
-        p_is_deposit: false,
-        p_dest_address: withdrawTargetInput
-      });
+    // Hit Supabase Cloud
+    const { data, error } = await supabase.rpc('rpc_bridge_asset', {
+      p_wallet_address: wallet.address.toLowerCase(),
+      p_asset: activeWithdrawAsset,
+      p_amount: withdrawVal,
+      p_is_deposit: false,
+      p_dest_address: withdrawTargetInput
+    });
 
-      if (error || !data?.success) {
-         setWithdrawStep('idle');
-         return toast.error("Egress Communication Failed (Did you run the Migration SQL?)");
-      }
+    if (error || !data?.success) {
+        setWithdrawStep('idle');
+        return toast.error("Egress Communication Failed. Check your connection.");
+    }
 
-      // The Relayer polling requires time. UI reacts instantly but marks it logically 'pending'.
-      if (activeWithdrawAsset === 'NATIVE') {
-        setNativeBalance((currentBalance - withdrawVal).toFixed(2));
-      } else if (activeWithdrawAsset === 'BTC') {
-        setBtcBalance((currentBalance - withdrawVal).toFixed(3));
-      } else {
-        setEthBalance((currentBalance - withdrawVal).toFixed(2));
-      }
-      setWithdrawStep('success');
-      addLog(`Asset Egress Queued. Awaiting Oracle Relayer Confirmation...`);
-      toast.success(`Egress request of ${withdrawVal} ${activeWithdrawAsset} queued to L1.`);
-      setTimeout(() => {
-          setWithdrawStep('idle');
-          setWithdrawAmountInput("");
-          setWithdrawTargetInput("");
-          setActiveModal(null);
-      }, 4000);
-    }, 2000);
+    // Capture the TX ID for the real-time listener
+    const txId = data.tx_id; // Assumes rpc_bridge_asset returns tx_id
+    setActiveBridgeTxId(txId);
+    setWithdrawStep('confirming');
+    addLog(`Asset Egress Queued (ID: ${txId?.slice(0,8)}). Awaiting Cloud Relayer...`);
+
+    // Update Local UI Balance (Optimistic)
+    if (activeWithdrawAsset === 'NATIVE') {
+      setNativeBalance((currentBalance - withdrawVal).toFixed(2));
+    } else if (activeWithdrawAsset === 'BTC') {
+      setBtcBalance((currentBalance - withdrawVal).toFixed(3));
+    } else {
+      setEthBalance((currentBalance - withdrawVal).toFixed(2));
+    }
   };
 
   const [nativeBalance, setNativeBalance] = useState("0.00");
@@ -490,6 +485,66 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const interval = setInterval(watchStatus, 5000); // Check every 5s for fast feedback
     return () => clearInterval(interval);
   }, [pendingTxs]);
+
+  // ☁️ Production Cloud Service Listener (Real-time Bridge Sync)
+  useEffect(() => {
+    if (!activeBridgeTxId) return;
+
+    const channel = supabase.channel('bridge-realtime')
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'transactions',
+        filter: `id=eq.${activeBridgeTxId}`
+      }, (payload) => {
+          const updatedTx = payload.new;
+          if (updatedTx.status === 'success') {
+              setWithdrawStep('success');
+              addLog(`✅ L1 SETTLEMENT ACHIEVED! Hash: ${updatedTx.tx_hash.slice(0,10)}...`);
+              toast.success("Bridge Transfer Successful!");
+              setTimeout(() => {
+                  setActiveBridgeTxId(null);
+                  setWithdrawStep('idle');
+                  setWithdrawAmountInput("");
+                  setWithdrawTargetInput("");
+                  setActiveModal(null);
+              }, 3000);
+          } else if (updatedTx.status === 'failed') {
+              setWithdrawStep('idle');
+              setActiveBridgeTxId(null);
+              addLog(`❌ L1 SETTLEMENT FAILED: ${updatedTx.error_log}`);
+              toast.error("Bridge Transfer Failed. Balance Refunded.");
+          }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeBridgeTxId]);
+
+  // ⛽ Real-time L1 Gas Price Estimator
+  useEffect(() => {
+    if (activeModal !== 'withdraw' || activeWithdrawAsset !== 'ETH') return;
+
+    const estimateGas = async () => {
+        setIsEstimatingGas(true);
+        try {
+            const provider = new ethers.JsonRpcProvider("https://eth-sepolia.g.alchemy.com/v2/demo");
+            const feeData = await provider.getFeeData();
+            if (feeData.gasPrice) {
+                // Typical L1 Transfer is 21,000 gas
+                const estimate = ethers.formatUnits(feeData.gasPrice * 21000n, 18);
+                setGasFeeEstimate(parseFloat(estimate).toFixed(6));
+            }
+        } catch (e) {
+            console.error("Gas estimation error:", e);
+        }
+        setIsEstimatingGas(false);
+    };
+
+    estimateGas();
+    const interval = setInterval(estimateGas, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, [activeModal, activeWithdrawAsset]);
 
   // 🛡️ Smart Identity Verification Loop
   useEffect(() => {
@@ -1357,6 +1412,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                       subtext="Zero Sovereign Gas Protocol Applied."
                    />
                 </div>
+
+                {activeWithdrawAsset === 'ETH' && (
+                   <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
+                       <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">L1 Network Fee Estimate</span>
+                       <div className="text-right">
+                           <p className="text-xs font-mono font-bold text-pink-400">
+                               {isEstimatingGas ? <RefreshCw size={10} className="animate-spin inline mr-1" /> : `~${gasFeeEstimate} ETH`}
+                           </p>
+                           <p className="text-[8px] text-white/20 uppercase font-bold tracking-tighter">Real-time Sepolia Node Feed</p>
+                       </div>
+                   </div>
+                )}
 
                 <button 
                  disabled={withdrawStep !== 'idle'}
