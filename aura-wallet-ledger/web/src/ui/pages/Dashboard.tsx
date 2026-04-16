@@ -199,10 +199,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     if (activeWithdrawAsset === 'NATIVE') {
       setNativeBalance((currentBalance - withdrawVal).toFixed(2));
     } else if (activeWithdrawAsset === 'BTC') {
-      setBtcBalance((currentBalance - withdrawVal).toFixed(3));
+      setBtcBalance((currentBalance - withdrawVal).toFixed(6));
     } else {
-      setEthBalance((currentBalance - withdrawVal).toFixed(2));
+      setEthBalance((currentBalance - withdrawVal).toFixed(6));
     }
+
+    // Safety Timeout: If L1 Relayer is offline, don't stay stuck forever
+    setTimeout(() => {
+        if (withdrawStep === 'confirming') {
+            setWithdrawStep('idle');
+            addLog("⚠️ Relayer Timeout: Request queued in Cloud, but L1 Pulse check delayed.");
+        }
+    }, 15000);
   };
 
   const [nativeBalance, setNativeBalance] = useState("0.00");
