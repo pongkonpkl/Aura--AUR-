@@ -942,6 +942,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     });
   };
 
+    });
+  };
+
   const handlePlaceSellOrder = async () => {
     if (!sellOrderAUR || !sellOrderPrice) return;
     const action = async () => {
@@ -1047,6 +1050,67 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
+
+      {/* Challenge Modal */}
+      {activeModal === 'challenge' && (
+        <div className="modal-overlay" onClick={() => { setActiveModal(null); setPendingAction(null); }}>
+          <div className="modal-content max-w-md border-indigo-500/20 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-8">
+               <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                    <Shield size={20} />
+                  </div>
+                  <h2 className="text-xl font-black text-white uppercase tracking-tight">Identity Challenge</h2>
+               </div>
+               <button onClick={() => { setActiveModal(null); setPendingAction(null); }} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
+            </div>
+
+            <div className="p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 mb-8 text-center space-y-4 relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 blur-3xl rounded-full" />
+               <p className="text-sm text-white/60 leading-relaxed font-medium relative z-10">
+                 To authorize this cloud operation, please provide word <span className="text-indigo-400 font-black">#{ (challengeIndex || 0) + 1 }</span> from your 12-word Sovereign Seed Phrase.
+               </p>
+               <div className="text-[10px] font-black text-indigo-400/40 uppercase tracking-[0.3em]">MFA: Security Level Alpha</div>
+            </div>
+
+            <div className="space-y-6">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest px-1">Challenge Input</label>
+                  <input 
+                    type="password"
+                    autoFocus
+                    className={`w-full bg-black/50 border ${challengeError ? 'border-red-500/50' : 'border-white/10'} rounded-2xl p-5 text-center text-2xl font-mono font-bold text-white placeholder-white/5 focus:border-indigo-500/50 outline-none transition-all tracking-[0.1em]`}
+                    placeholder="ENTER WORD..."
+                    value={challengeInput}
+                    onChange={(e) => {
+                      setChallengeInput(e.target.value);
+                      if (challengeError) setChallengeError(false);
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyChallenge()}
+                  />
+                  {challengeError && (
+                    <p className="text-[10px] font-bold text-red-500 mt-2 text-center uppercase tracking-tighter animate-in shake duration-300">
+                      ❌ Verification Failed: Invalid Mnemonic Match
+                    </p>
+                  )}
+               </div>
+
+               <button 
+                 onClick={handleVerifyChallenge}
+                 className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm uppercase rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-500/10 active:scale-95"
+               >
+                 <Key size={18} /> Complete Identity Check
+               </button>
+
+               <div className="flex flex-col items-center gap-2 pt-2">
+                 <p className="text-[9px] text-white/20 uppercase font-black tracking-[0.3em] flex items-center gap-2">
+                   <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> E2EE Sovereign Protection
+                 </p>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Send Modal */}
       {activeModal === 'send' && (
