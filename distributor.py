@@ -23,15 +23,18 @@ def run_distribution():
             f"{SUPABASE_URL}/rest/v1/rpc/rpc_distribute_rewards",
             headers=get_headers()
         )
-        if resp.status_code == 200:
+        if resp.status_code == 200 and resp.json().get('success') is True:
             print("Successfully triggered distribution RPC.")
             return resp.json()
+        elif resp.status_code == 200 and resp.json().get('success') is False:
+             print(f"RPC returned error: {resp.text}")
+             exit(1)
         else:
-            print(f"Failed to trigger distribution: {resp.text}")
-            return None
+            print(f"Failed to trigger distribution HTTP {resp.status_code}: {resp.text}")
+            exit(1)
     except Exception as e:
         print(f"Error during RPC call: {e}")
-        return None
+        exit(1)
 
 def sync_ledger():
     print(f"[{datetime.now()}] Synchronizing local ledger with cloud state...")

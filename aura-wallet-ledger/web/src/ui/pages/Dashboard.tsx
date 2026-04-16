@@ -128,7 +128,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         p_wallet_address: wallet.address.toLowerCase(),
         p_asset: activeDepositAsset,
         p_amount: depositAmount,
-        p_is_deposit: true
+        p_is_deposit: true,
+        p_dest_address: 'SovereignGateway'
       });
 
       if (error || !data?.success) {
