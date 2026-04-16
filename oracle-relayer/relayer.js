@@ -124,15 +124,31 @@ async function finalizeInSupabase(txId, txHash) {
 }
 
 async function markFailedInSupabase(txId, reason) {
-    await supabase
-        .from('transactions')
-        .update({ 
-            status: 'failed', 
-            error_log: reason,
-        })
-        .eq('id', txId);
+    const { data, error } = await supabase.rpc('rpc_bridge_refund', {
+        p_tx_id: txId,
+        p_reason: reason
+    });
+
+    if (error) {
+        console.error(`❌ Failed to process Refund for tx ${txId}:`, error);
+    } else {
+        console.log(`♻️ Bridge Egress Failed. Automatically Refunded asset to User Treasury.`);
+    }
 }
 
-// Start Polling Loop (Every 5 seconds)
-setInterval(pollPendingTransactions, 5000);
+let isPolling = false;
+async function startPolling() {
+    if (isPolling) return;
+    isPolling = true;
+    try {
+        await pollPendingTransactions();
+    } catch (e) {
+        console.error("Polling Error:", e);
+    }
+    isPolling = false;
+    setTimeout(startPolling, 5000);
+}
+
+// Start Polling Loop
 console.log("👁️  Listening for Bridge Out requests from Supabase...");
+startPolling();
