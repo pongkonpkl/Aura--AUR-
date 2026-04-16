@@ -1508,46 +1508,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <div className="flex gap-3">
                   <button 
                     onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
                   >
                     Lock & Earn Output
-                  </button>
-                  <button 
-                    disabled={isClaiming || BigInt(pendingRewardAtom) === 0n}
-                    onClick={handleClaim} 
-                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 border transition-all text-sm shadow-lg ${
-                      isClaiming || BigInt(pendingRewardAtom) === 0n 
-                      ? 'bg-amber-500/10 text-amber-500/40 border-amber-500/10 cursor-not-allowed' 
-                      : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
-                    }`}
-                  >
-                    {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />} 
-                    Claim Output
                   </button>
                 </div>
               </div>
 
-              {/* Presence Pulse (PoP) */}
-              <div className="glass-panel-accent p-8 rounded-3xl relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-500/10 blur-[80px]" />
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white/10 rounded-xl text-white relative">
-                      <Activity size={24} className="relative z-10" />
-                    </div>
-                    <span className="text-sm font-bold text-white uppercase tracking-widest">Network Health Pulse</span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-white/10 text-white rounded-md">Sovereign Witness</span>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-3xl font-mono font-bold tracking-tighter text-amber-400 animate-pulse-slow">
-                    +{ethers.formatUnits(pendingRewardAtom, 18)}
-                  </p>
-                  <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-                    Unclaimed Protocol Yield (Live)
-                  </p>
-                </div>
-              </div>
+
 
             </div>
 
