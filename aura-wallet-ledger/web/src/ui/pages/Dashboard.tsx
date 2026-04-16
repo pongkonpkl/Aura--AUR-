@@ -942,9 +942,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     });
   };
 
-    });
-  };
-
   const handlePlaceSellOrder = async () => {
     if (!sellOrderAUR || !sellOrderPrice) return;
     const action = async () => {
