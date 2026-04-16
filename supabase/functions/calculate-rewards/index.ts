@@ -22,11 +22,11 @@ serve(async (req) => {
 
     const activeUserIds = [...new Set(activeLogs?.map(l => l.user_id) || [])];
     
-    // 2. Find users who are staking (Proof of Stake)
+    // 2. Find users who are staking (Proof of Stake) directly from profiles
     const { data: stakers } = await supabase
-      .from('stakes')
-      .select('user_id, amount')
-      .gt('amount', 0);
+      .from('profiles')
+      .select('id, staked_balance')
+      .gt('staked_balance', 0);
 
     const totalStakers = stakers?.length || 0;
     const totalActiveNodes = activeUserIds.length;
@@ -41,11 +41,11 @@ serve(async (req) => {
     if (totalActiveNodes > 0) {
       const perNode = popPool / BigInt(totalActiveNodes);
       for (const uid of activeUserIds) {
+        // Updated to use profiles.balance directly if RPC doesn't exist, or keep as RPC if it's standardized
         await supabase.rpc('increment_accumulated', { user_id: uid, amount: perNode.toString() });
         await supabase.from('distributions').insert({
-          recipient_address: uid,
           amount: perNode.toString(),
-          event_type: 'POP'
+          dist_type: 'presence'
         });
       }
     }
@@ -54,11 +54,11 @@ serve(async (req) => {
     if (totalStakers > 0) {
       const perStaker = posPool / BigInt(totalStakers);
       for (const s of stakers!) {
-        await supabase.rpc('increment_pending_stake', { user_id: s.user_id, amount: perStaker.toString() });
+        // Update the balance in profiles
+        await supabase.rpc('increment_pending_stake', { user_id: s.id, amount: perStaker.toString() });
         await supabase.from('distributions').insert({
-          recipient_address: s.user_id,
           amount: perStaker.toString(),
-          event_type: 'POS'
+          dist_type: 'staking'
         });
       }
     }

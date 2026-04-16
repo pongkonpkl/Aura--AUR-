@@ -193,3 +193,18 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. Atomic Reward Increments
+CREATE OR REPLACE FUNCTION increment_accumulated(user_id UUID, amount NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE profiles SET balance = balance + amount, updated_at = NOW() WHERE id = user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION increment_pending_stake(user_id UUID, amount NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE profiles SET balance = balance + amount, updated_at = NOW() WHERE id = user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
