@@ -44,6 +44,16 @@
   },
   "history": [
     {
+      "id": "b14db537-6d89-4299-a32b-2ac1fb5a1e29",
+      "tx_hash": "0xf858d069918f907fc87a30cae4b305134307351e373c526e00091677814b29be",
+      "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
+      "to_address": "0xDEF092AF8138Db03e83664DF86ddDbF2AcB2F134",
+      "amount_atom": 0.1,
+      "tx_type": "bridge_out",
+      "created_at": "2026-04-16T14:58:26.158509+00:00",
+      "cloud_validated": true
+    },
+    {
       "id": "430669c4-a8f9-4e73-821c-7f1cc4aca01e",
       "tx_hash": "wd-1776186230.439979",
       "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
