@@ -450,8 +450,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         if (profile) {
           await supabase.from('mining_logs').insert({
             user_id: profile.id,
-            hash_rate: 1.0, // Base PoHA metric
-            earned_amount: "1000000000000" // Optional: micro-reward per heartbeat
+            hash_rate: 1.0 // Base PoHA metric
           });
           addLog(`Quantum heartbeat synchronized to Cloud.`);
         }
