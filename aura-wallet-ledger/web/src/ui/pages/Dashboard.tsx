@@ -166,8 +166,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             return toast.error("Bridge Record Failed. Try again.");
         }
 
-        const current = parseFloat(ethBalance);
-        setEthBalance((current + detectedAmount).toFixed(6));
+        // 🔄 PROFESSIONAL SYNC: Refetch the source of truth from Cloud
+        const { data: updatedProfile } = await supabase
+            .from('profiles')
+            .select('eth_balance')
+            .eq('wallet_address', wallet.address.toLowerCase())
+            .single();
+
+        if (updatedProfile) {
+            setEthBalance(Number(updatedProfile.eth_balance).toFixed(6));
+        }
+        
         setDepositStep('success');
         addLog(`Successfully Wrapped ${detectedAmount} ETH into Sovereign Vault.`);
         toast.success(`0.0001 ETH Inflow Finalized!`);
