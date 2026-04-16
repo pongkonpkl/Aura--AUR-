@@ -336,7 +336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           // Sync Cloud Vault Assets
           setNativeBalance(profile.native_balance != null ? Number(profile.native_balance).toFixed(2) : "0.00");
           setBtcBalance(profile.btc_balance != null ? Number(profile.btc_balance).toFixed(3) : "0.000");
-          setEthBalance(profile.eth_balance != null ? Number(profile.eth_balance).toFixed(2) : "0.00");
+          setEthBalance(profile.eth_balance != null ? Number(profile.eth_balance).toFixed(6) : "0.000000");
           
           // Apply Optimistic Offsets
           const pendingOut = pendingTxs.filter(t => t.type === 'transfer' || t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
