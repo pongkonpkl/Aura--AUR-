@@ -150,8 +150,11 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Service Role required');
     END IF;
 
-    -- 1. Fetch last distribution time
-    SELECT created_at INTO v_last_dist_time FROM distributions ORDER BY created_at DESC LIMIT 1;
+    -- 1. Fetch last STAKING distribution time specifically (BUG FIX: dist_type filter)
+    SELECT created_at INTO v_last_dist_time 
+    FROM distributions 
+    WHERE dist_type = 'pos_hourly_pulse' 
+    ORDER BY created_at DESC LIMIT 1;
     
     -- If no previous distribution, default to 1 hour ago
     IF v_last_dist_time IS NULL THEN
@@ -170,12 +173,20 @@ BEGIN
 
     -- 3. Distribute only if people are staking
     IF v_total_staked > 0 AND v_total_reward_atom > 0 THEN
-        -- Add rewards proportional to their stake (Multiply before divide for precision)
+        -- A: Update Profiles (UPGRADE: Auto-Compound into staked_balance instead of balance)
         UPDATE profiles
-        SET balance = balance + FLOOR((staked_balance * v_total_reward_atom) / v_total_staked),
+        SET staked_balance = staked_balance + FLOOR((staked_balance * v_total_reward_atom) / v_total_staked),
             updated_at = NOW()
         WHERE staked_balance > 0;
         
+        -- B: Sync Validators (Update voting power to match new staked balance)
+        UPDATE validators v
+        SET voting_power = p.staked_balance,
+            updated_at = NOW()
+        FROM profiles p
+        WHERE v.wallet_address = p.wallet_address
+        AND p.staked_balance > 0;
+
         -- Log the successful distribution
         INSERT INTO distributions (amount, dist_type) 
         VALUES (v_total_reward_atom, 'pos_hourly_pulse')
@@ -184,9 +195,11 @@ BEGIN
         RETURN jsonb_build_object(
             'success', true, 
             'distribution_id', v_dist_id, 
-            'total_aur_atoms', v_total_reward_atom,
+            'total_aur_atoms_distributed', v_total_reward_atom,
+            'total_aur_distributed', (v_total_reward_atom::NUMERIC / 1e18),
             'seconds_elapsed', v_seconds_elapsed,
-            'recipients_count', (SELECT count(*) FROM profiles WHERE staked_balance > 0)
+            'recipients_count', (SELECT count(*) FROM profiles WHERE staked_balance > 0),
+            'mode', 'auto-compounding'
         );
     ELSE
         RETURN jsonb_build_object('success', false, 'error', 'No active stakers or zero time elapsed');
