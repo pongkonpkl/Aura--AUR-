@@ -68,6 +68,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [recipientProfile, setRecipientProfile] = useState<{nick?: string, exists: boolean} | null>(null);
   const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
+  const [optimisticReward, setOptimisticReward] = useState<bigint>(0n);
   const [isClaiming, setIsClaiming] = useState(false);
 
   // Sovereign Seed Challenge (MFA) States
@@ -112,52 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return wallet.address;
   };
 
-  const handleVerifyDeposit = async () => {
-    if (activeDepositAsset !== 'ETH') {
-        setDepositStep('waiting');
-        addLog(`Broadcasting Bridge Intent for ${activeDepositAsset}...`);
-        await new Promise(r => setTimeout(r, 2000));
-        setDepositStep('success');
-        addLog(`Simulation: ${activeDepositAsset} inflow detected.`);
-        setTimeout(() => setDepositStep('idle'), 3000);
-        return;
-    }
-
-    setDepositStep('waiting');
-    addLog(`🔍 Scanning Sepolia Network for ${activeDepositAsset} inflow...`);
-    
-    try {
-        // PROFESSIONAL SYNC: Check for on-chain state updates in the Cloud DB
-        await new Promise(r => setTimeout(r, 2000)); // UI Feedback
-        setDepositStep('confirming');
-        
-        // 🔄 REFETCH SOURCE OF TRUTH
-        const { data: updatedProfile, error } = await supabase
-            .from('profiles')
-            .select('eth_balance')
-            .eq('wallet_address', wallet.address.toLowerCase())
-            .single();
-
-        if (error || !updatedProfile) {
-            setDepositStep('idle');
-            return toast.error("Cloud Sync Failed. Check Connection.");
-        }
-
-        setEthBalance(Number(updatedProfile.eth_balance).toFixed(6));
-        
-        addLog(`✅ DATA SYNC: Aura Sovereign Vault synchronized with Global L1 Ledger.`);
-        setDepositStep('success');
-        toast.success(`Vault Data Synchronized!`);
-        
-        // Auto-reset to 'idle' so the button works again
-        setTimeout(() => setDepositStep('idle'), 3000);
-
-    } catch (err) {
-        console.error("Bridge Sync Error:", err);
-        setDepositStep('idle');
-        toast.error("Network Scan Interrupted.");
-    }
-  };
+  // --- 🛰️ Legacy Bridge Deactivated ---
 
   const handleSimulateWithdraw = async () => {
     if (!withdrawAmountInput || !withdrawTargetInput) return;
@@ -295,74 +251,51 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   useEffect(() => {
     const syncWithSupabase = async () => {
       try {
-        // 1. Fetch Profile & Balance
+        // 1. Fetch Global Sovereign Stats (Pre-calculated for 1B Scale)
+        const { data: globalStats } = await supabase
+          .from('sovereign_stats')
+          .select('*')
+          .eq('id', 'global')
+          .single();
+
+        if (globalStats) {
+          setTotalEmission(globalStats.total_supply_atom?.toString() || "0");
+          setDailyEmission(globalStats.daily_mined_atom?.toString() || "0");
+          setActiveNodesCount(Number(globalStats.total_wallets || 0));
+          setNetworkStats({ 
+            activeNodes: Number(globalStats.total_wallets || 0), 
+            sharedPool: Number(ethers.formatUnits(globalStats.daily_mined_atom || "0", 18)).toFixed(4)
+          });
+        }
+
+        // 2. Fetch Authoritative Profile & Balance (Hits exact shard via address)
         const { data: profile, error: pError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('wallet_address', wallet.address.toLowerCase())
+          .eq('address', wallet.address.toLowerCase())
           .single();
 
         if (pError && pError.code === 'PGRST116') {
-          // Profile not found, create one (Auto-registration)
-          await supabase.from('profiles').insert({
-            wallet_address: wallet.address.toLowerCase(),
-            nickname: 'Aura Sovereign'
-          });
-          if (!hasLoggedRegistration.current) {
-            addLog("Sovereign Identity Registered in Cloud.");
-            hasLoggedRegistration.current = true;
-          }
+          // Auto-registration logic for new sovereign citizens
+          await supabase.rpc('rpc_log_pulse', { p_user_address: wallet.address.toLowerCase() });
         } 
 
         if (profile) {
-          const serverBalance = BigInt(profile.balance || "0");
-          const serverStaked = BigInt(profile.staked_balance || "0");
+          const serverBalance = BigInt(profile.balance_atom || "0");
+          const serverStaked = BigInt(profile.staked_balance_atom || "0");
+          if (profile.pending_reward_atom) setPendingRewardAtom(profile.pending_reward_atom);
 
-          // Sync Cloud Vault Assets
+          // Sync Multi-Vault Assets
           setNativeBalance(profile.native_balance != null ? Number(profile.native_balance).toFixed(2) : "0.00");
           setBtcBalance(profile.btc_balance != null ? Number(profile.btc_balance).toFixed(3) : "0.000");
           setEthBalance(profile.eth_balance != null ? Number(profile.eth_balance).toFixed(6) : "0.000000");
           
-          // Apply Optimistic Offsets
-          const pendingOut = pendingTxs.filter(t => t.type === 'transfer' || t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingIn = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingStakeOut = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + t.amount, 0n);
-          const pendingStakeIn = pendingTxs.filter(t => t.type === 'stake').reduce((acc, t) => acc + t.amount, 0n);
-
-          setBalanceAtom((serverBalance - pendingOut + pendingIn).toString());
-          setStakedBalanceAtom((serverStaked - pendingStakeOut + pendingStakeIn).toString());
+          setBalanceAtom(serverBalance.toString());
+          setStakedBalanceAtom(serverStaked.toString());
           setIsEngineReady(true);
         }
 
-        // 3. Network Stats & Emission Control
-        const startOfToday = new Date();
-        startOfToday.setHours(0,0,0,0);
-
-        // Today's Pulse
-        const { data: dailyData } = await supabase
-          .from('distributions')
-          .select('amount')
-          .gte('created_at', startOfToday.toISOString());
-        
-        const sumToday = dailyData?.reduce((acc, curr) => acc + BigInt(curr.amount || "0"), BigInt(0)) || BigInt(0);
-        setDailyEmission(sumToday.toString());
-
-        // Global Total Supply (Lifetime Mined)
-        const { data: globalData } = await supabase
-          .from('distributions')
-          .select('amount');
-        
-        const sumTotal = globalData?.reduce((acc, curr) => acc + BigInt(curr.amount || "0"), BigInt(0)) || BigInt(0);
-        setTotalEmission(sumTotal.toString());
-
-        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        setActiveNodesCount(count || 0);
-        setNetworkStats({ 
-          activeNodes: count || 0, 
-          sharedPool: Number(ethers.formatUnits(sumToday, 18)).toFixed(4)
-        });
-        
-        // 4. Fetch Aura Sovereign Ledger (The Real History)
+        // 3. Fetch Sharded Ledger (The Real History)
         const { data: auraLedger } = await supabase
           .from('ledger')
           .select('*')
@@ -372,94 +305,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         
         if (auraLedger) setHistory(auraLedger);
 
-        // 5. Initial fallbacks from Cloud data, then Ledger fetch...
-        if (sumTotal > 0n) setTotalEmission(sumTotal.toString());
-        if (sumToday > 0n) setDailyEmission(sumToday.toString());
-
-
-        // 4. Legacy Balance Detection
-        try {
-          const res = await fetch(`${REPO_RAW_BASE}/ledger.json?t=${Date.now()}`);
-          if (res.ok) {
-            const ledger = await res.json();
-            
-            // 🌟 SYNC GLOBAL TOTALS
-            if (ledger.total_supply) setTotalEmission(ledger.total_supply);
-            // Estimate pulse from last 24h history or fixed 1.0 AUR base
-            // Use the value from Supabase if available, otherwise fallback
-            if (sumToday === BigInt(0)) {
-              setDailyEmission("1000000000000000000"); 
-            }
-
-            const addressKey = wallet.address.toLowerCase();
-            // Case-insensitive lookup for legacy ledger
-            const balances = Object.fromEntries(Object.entries(ledger.balances || {}).map(([k, v]) => [k.toLowerCase(), v]));
-            const stakedBalances = Object.fromEntries(Object.entries(ledger.staked_balances || {}).map(([k, v]) => [k.toLowerCase(), v]));
-            
-            const legacyBalance = BigInt(balances[addressKey] || "0");
-            const cloudBalance = BigInt(profile?.balance || "0");
-            
-            if (legacyBalance > cloudBalance) {
-              if (!hasLoggedDiscovery.current) {
-                addLog(`⚠️ Legacy Discovery: Found ${Number(ethers.formatUnits(legacyBalance, 18)).toFixed(4)} AUR.`);
-                hasLoggedDiscovery.current = true;
-              }
-              setLegacyPendingBalance(legacyBalance.toString());
-            }
-          }
-        } catch (e) { /* silent fail for ledger fetch */ }
-
       } catch (err) {
-        console.error("Supabase sync error:", err);
+        console.error("Singularity Sync Error:", err);
       }
     };
 
     const heartbeat = async () => {
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('address', wallet.address.toLowerCase())
-          .single();
+        const { data, error } = await supabase.rpc('rpc_log_pulse', {
+           p_user_address: wallet.address.toLowerCase()
+        });
 
-        if (profile) {
-          await supabase.from('mining_logs').insert({
-            user_id: profile.id,
-            hash_rate: 1.0 
-          });
-          // Update Presence in profile
-          await supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('address', wallet.address.toLowerCase());
-          addLog(`Sovereign Pulse: Synchronized to Cloud Validator.`);
-        }
+        if (error) throw error;
+        setOptimisticReward(0n); // Reset optimistic accumulation after real sync
+        addLog(`Sovereign Pulse: Synchronized to Cloud Validator (Reward Accumulated).`);
       } catch (e) {
-        addLog("Cloud Heartbeat failed. Check internet connection.");
+        addLog("Cloud Pulse failed. Check internet connection.");
       }
     };
 
-    const syncWithEngine = async () => {
-      try {
-        const res = await fetch(`${LOCAL_ENGINE_URL}/wallet-summary?address=${wallet.address}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.pending_reward_atom) {
-            setPendingRewardAtom(data.pending_reward_atom);
-          }
-        }
-      } catch (e) { /* engine might be offline */ }
-    };
-
+/* Removed legacy engine sync - All power has been moved to Singularity Cloud */
     syncWithSupabase();
-    syncWithEngine();
     heartbeat();
     
-    const syncInterval = setInterval(syncWithSupabase, 10000);
-    const engineInterval = setInterval(syncWithEngine, 5000);
+    const syncInterval = setInterval(syncWithSupabase, 15000);
     const heartbeatInterval = setInterval(heartbeat, 60000);
+
+    // 📈 Optimistic Reward Counter (Real-time Feedback)
+    const optimisticInterval = setInterval(() => {
+        setOptimisticReward(prev => prev + 100000000000000n); // +0.0001 AUR per tick (matches pulse rate)
+    }, 10000);
 
     return () => {
       clearInterval(syncInterval);
-      clearInterval(engineInterval);
       clearInterval(heartbeatInterval);
+      clearInterval(optimisticInterval);
     };
   }, [wallet, pendingTxs]);
 
@@ -567,7 +447,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const { data, error } = await supabase
           .from('profiles')
           .select('nickname')
-          .eq('wallet_address', recipient.toLowerCase())
+          .eq('address', recipient.toLowerCase())
           .single();
 
         if (data) {
@@ -653,24 +533,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
           const signature = await wallet.signMessage(message);
           
-          const resp = await fetch(`${LOCAL_ENGINE_URL}/claim-op`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  tx: { address: wallet.address, nonce: nextNonce }, 
-                  signature 
-              })
-          });
-          
-          const result = await resp.json();
-          if (result.ok) {
-              addLog(`✅ Reward Claimed: ${ethers.formatUnits(result.amount_atom, 18)} AUR`);
-              setPendingRewardAtom("0");
-              setBalanceAtom((BigInt(balanceAtom) + BigInt(result.amount_atom)).toString());
-              setLastCloudOpTime(Date.now());
-          } else {
-              throw new Error(result.error || "Claim failed");
-          }
+           const { data, error } = await supabase.rpc('rpc_claim_rewards', {
+              p_user_address: wallet.address.toLowerCase(),
+              p_signature: signature,
+              p_nonce: nextNonce
+           });
+           
+           if (error) throw error;
+           if (!data.success) throw new Error(data.error);
+
+           addLog(`✅ Reward Claimed: ${ethers.formatUnits(data.claimed_amount, 18)} AUR`);
+           setPendingRewardAtom("0");
+           setOptimisticReward(0n);
+           setBalanceAtom((BigInt(balanceAtom) + BigInt(data.claimed_amount)).toString());
+           setLastCloudOpTime(Date.now());
         } catch(e: any) {
           addLog(`❌ Claim Error: ${e.message}`);
         }
@@ -1412,8 +1288,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       )}
 
       {/* Bridge System Deactivated */}
-        </div>
-      )}
 
 
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -1524,35 +1398,69 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 </div>
               </div>
 
-              {/* Sovereign Staking (PoS) */}
-              <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-emerald-500/10">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                      <Lock size={24} />
-                    </div>
-                    <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Stake</span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20">Sovereign Vault</span>
-                </div>
-                <div className="space-y-1 mb-8">
-                  <p className="text-5xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
-                    {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-2xl text-emerald-400/40"> AUR</span>
-                  </p>
-                  <p className="text-sm text-emerald-400 font-medium flex items-center gap-2">
-                    <RefreshCw size={12} className="animate-spin-slow" /> Compounding (Protocol Distribution: 100% Yield)
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold flex justify-center items-center gap-2 border border-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20"
-                  >
-                    Lock & Earn Output
-                  </button>
-                </div>
-              </div>
+               {/* Sovereign Staking (PoS) */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-emerald-500/10">
+                   <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
+                   <div className="flex items-center justify-between mb-6">
+                     <div className="flex items-center gap-4">
+                       <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                         <Lock size={24} />
+                       </div>
+                       <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Stake</span>
+                     </div>
+                   </div>
+                   <div className="space-y-1 mb-8">
+                     <p className="text-4xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
+                       {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-xl text-emerald-400/40"> AUR</span>
+                     </p>
+                     <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                       <RefreshCw size={10} className="animate-spin-slow" /> Compounding Active
+                     </p>
+                   </div>
+                   <button 
+                     onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
+                     className="w-full py-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 rounded-xl font-bold border border-emerald-500/20 transition-all text-xs"
+                   >
+                     Manage Vault
+                   </button>
+                 </div>
+
+                 {/* LIVE REWARD COUNTER (The Antidote to Boredom) */}
+                 <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-amber-500/20 shadow-[0_0_30px_rgba(245,158,11,0.05)]">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-3xl rounded-full" />
+                   <div className="flex items-center justify-between mb-6">
+                     <div className="flex items-center gap-4">
+                       <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                         <Zap size={24} className="animate-pulse" />
+                       </div>
+                       <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Reward Accrual</span>
+                     </div>
+                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 text-[9px] font-black italic">
+                        AUR PROTOCOL
+                     </div>
+                   </div>
+                   <div className="space-y-1 mb-8">
+                     <p className="text-4xl font-bold tracking-tighter text-amber-500 group-hover:scale-105 transition-transform origin-left">
+                       {ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18).slice(0, 10)}
+                       <span className="text-xl opacity-30"> AUR</span>
+                     </p>
+                     <p className="text-[10px] text-amber-500/60 font-medium tracking-tight">
+                       Real-time cloud mining from active presence.
+                     </p>
+                   </div>
+                   <button 
+                     disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
+                     onClick={handleClaim}
+                     className={`w-full py-4 bg-amber-500 text-black font-black text-xs uppercase rounded-xl shadow-lg shadow-amber-500/20 hover:bg-amber-400 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                       isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n ? 'opacity-20 grayscale pointer-events-none' : ''
+                     }`}
+                   >
+                     {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <PlusCircle size={14} />}
+                     Claim Sovereign Rewards
+                   </button>
+                 </div>
+               </div>
 
 
 
