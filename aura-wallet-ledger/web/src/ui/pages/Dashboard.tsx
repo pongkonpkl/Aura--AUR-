@@ -647,8 +647,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
           const signature = await wallet.signMessage(message);
           
-          const txHash = await submitCloudTx('stake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
-          addLog(`Cloud Stake Sent. Awaiting cloud validation.`);
+          const txHash = await submitCloudTx('stake', { 
+              address: wallet.address.toLowerCase(), 
+              amount_atom: amountAtom.toString(), 
+              nonce: nextNonce 
+          }, signature);
+          
+          addLog(`Cloud Stake Sent. Awaiting Sovereign Fleet validation.`);
           setLastCloudOpTime(Date.now());
           
           setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
@@ -678,7 +683,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
           const signature = await wallet.signMessage(message);
           
-          const txHash = await submitCloudTx('unstake', { address: wallet.address, amount_atom: amountAtom.toString(), nonce: nextNonce }, signature);
+          const txHash = await submitCloudTx('unstake', { 
+              address: wallet.address.toLowerCase(), 
+              amount_atom: amountAtom.toString(), 
+              nonce: nextNonce 
+          }, signature);
+          
           addLog(`Unstake request broadcasted to Sovereign Fleet.`);
           setLastCloudOpTime(Date.now());
           
@@ -1226,7 +1236,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   : (stakingTab === 'stake' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400') + ' text-white'
                 }`}
               >
-                {isStaking ? (stakingTab === 'stake' ? 'Locking on L3...' : 'Unlocking...') : (stakingTab === 'stake' ? 'Confirm L3 Stake' : 'Confirm Unlock')}
+                {isStaking ? (stakingTab === 'stake' ? 'Locking on Sovereign...' : 'Unlocking...') : (stakingTab === 'stake' ? 'Confirm Sovereign Stake' : 'Confirm Unlock')}
               </button>
             </div>
           </div>
