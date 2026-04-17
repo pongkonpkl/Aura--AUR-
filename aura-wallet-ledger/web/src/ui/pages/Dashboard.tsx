@@ -160,57 +160,55 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   };
 
   const handleSimulateWithdraw = async () => {
-    if (!withdrawAmountInput || !withdrawTargetInput) return toast.error("Provide Amount and Target Address");
+    if (!withdrawAmountInput || !withdrawTargetInput) return;
     
-    let currentBalance = 0;
-    if (activeWithdrawAsset === 'NATIVE') currentBalance = parseFloat(nativeBalance);
-    else if (activeWithdrawAsset === 'BTC') currentBalance = parseFloat(btcBalance);
-    else if (activeWithdrawAsset === 'ETH') currentBalance = parseFloat(ethBalance);
+    const action = async () => {
+      setWithdrawStep('processing');
+      try {
+        const amountAtom = ethers.parseUnits(withdrawAmountInput, 18);
+        const currentNonce = await fetchNonce(wallet.address);
+        const nextNonce = currentNonce + 1;
 
-    const withdrawVal = parseFloat(withdrawAmountInput);
-    if (withdrawVal <= 0 || isNaN(withdrawVal) || withdrawVal > currentBalance) {
-      return toast.error("Insufficient Vault Balance");
-    }
+        addLog(`Sovereign Protocol: Preparing Egress for ${withdrawAmountInput} AUR...`);
+        
+        // Cryptographic Egress Message
+        const message = `AUR_EGRESS:${nextNonce}:${wallet.address.toLowerCase()}:${withdrawTargetInput.toLowerCase()}:${amountAtom}`;
+        const signature = await wallet.signMessage(message);
 
-    setWithdrawStep('processing');
-    addLog(`Initiating Egress Protocol: Burning ${withdrawVal} ${activeWithdrawAsset}...`);
-    
-    // Hit Supabase Cloud
-    const { data, error } = await supabase.rpc('rpc_bridge_asset', {
-      p_wallet_address: wallet.address.toLowerCase(),
-      p_asset: activeWithdrawAsset,
-      p_amount: withdrawVal,
-      p_is_deposit: false,
-      p_dest_address: withdrawTargetInput
-    });
+        addLog("Settlement: Authorized Burn Protocol via Signature.");
+        
+        const { data, error } = await supabase.rpc('rpc_settle_egress', {
+          p_user_address: wallet.address.toLowerCase(),
+          p_target_evm_address: withdrawTargetInput.toLowerCase(),
+          p_amount_atom: amountAtom.toString(),
+          p_signature: signature,
+          p_nonce: nextNonce
+        });
 
-    if (error || !data?.success) {
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error);
+
+        setWithdrawStep('success');
+        addLog(`🔥 Burn Finalized: ${withdrawAmountInput} AUR removed from Ledger.`);
+        addLog(`📡 Bridge Signal: Egress queued for MetaMask (${withdrawTargetInput.slice(0,6)}...)`);
+        
+        // Update local state optimistically
+        setBalanceAtom((prev) => (BigInt(prev) - amountAtom).toString());
+        setWithdrawAmountInput("");
+        setWithdrawStep('success'); // Show success green state
+        
+        setTimeout(() => {
+          setWithdrawStep('idle');
+          setActiveModal(null);
+        }, 4000);
+
+      } catch (e: any) {
+        addLog(`❌ Egress Error: ${e.message}`);
+        console.error("Egress Failed:", e);
         setWithdrawStep('idle');
-        return toast.error("Egress Communication Failed. Check your connection.");
-    }
-
-    // Capture the TX ID for the real-time listener
-    const txId = data.tx_id; // Assumes rpc_bridge_asset returns tx_id
-    setActiveBridgeTxId(txId);
-    setWithdrawStep('confirming');
-    addLog(`Asset Egress Queued (ID: ${txId?.slice(0,8)}). Awaiting Cloud Relayer...`);
-
-    // Update Local UI Balance (Optimistic)
-    if (activeWithdrawAsset === 'NATIVE') {
-      setNativeBalance((currentBalance - withdrawVal).toFixed(2));
-    } else if (activeWithdrawAsset === 'BTC') {
-      setBtcBalance((currentBalance - withdrawVal).toFixed(6));
-    } else {
-      setEthBalance((currentBalance - withdrawVal).toFixed(6));
-    }
-
-    // Safety Timeout: If L1 Relayer is offline, don't stay stuck forever
-    setTimeout(() => {
-        if (withdrawStep === 'confirming') {
-            setWithdrawStep('idle');
-            addLog("⚠️ Relayer Timeout: Request queued in Cloud, but L1 Pulse check delayed.");
-        }
-    }, 15000);
+      }
+    };
+    wrapWithChallenge(action);
   };
 
   const [nativeBalance, setNativeBalance] = useState("0.00");
@@ -364,15 +362,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           sharedPool: Number(ethers.formatUnits(sumToday, 18)).toFixed(4)
         });
         
-        // 4. Fetch Transaction History
-        const { data: txHistory } = await supabase
-          .from('transactions')
+        // 4. Fetch Aura Sovereign Ledger (The Real History)
+        const { data: auraLedger } = await supabase
+          .from('ledger')
           .select('*')
-          .or(`from_address.eq.${wallet.address.toLowerCase()},to_address.eq.${wallet.address.toLowerCase()}`)
+          .or(`sender.eq.${wallet.address.toLowerCase()},receiver.eq.${wallet.address.toLowerCase()}`)
           .order('created_at', { ascending: false })
           .limit(15);
         
-        if (txHistory) setHistory(txHistory);
+        if (auraLedger) setHistory(auraLedger);
 
         // 5. Initial fallbacks from Cloud data, then Ledger fetch...
         if (sumTotal > 0n) setTotalEmission(sumTotal.toString());
@@ -418,19 +416,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
     const heartbeat = async () => {
       try {
-        // Log Presence to Supabase mining_logs
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
-          .eq('wallet_address', wallet.address.toLowerCase())
+          .eq('address', wallet.address.toLowerCase())
           .single();
 
         if (profile) {
           await supabase.from('mining_logs').insert({
             user_id: profile.id,
-            hash_rate: 1.0 // Base PoHA metric
+            hash_rate: 1.0 
           });
-          addLog(`Quantum heartbeat synchronized to Cloud.`);
+          // Update Presence in profile
+          await supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('address', wallet.address.toLowerCase());
+          addLog(`Sovereign Pulse: Synchronized to Cloud Validator.`);
         }
       } catch (e) {
         addLog("Cloud Heartbeat failed. Check internet connection.");
@@ -591,12 +590,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       // Security Hardening: Prioritize Database-driven Nonce
       const { data: profile } = await supabase
         .from('profiles')
-        .select('last_nonce')
-        .eq('wallet_address', address.toLowerCase())
+        .select('nonce')
+        .eq('address', address.toLowerCase())
         .single();
       
-      if (profile && profile.last_nonce !== null) {
-        return Number(profile.last_nonce);
+      if (profile && profile.nonce !== null) {
+        return Number(profile.nonce);
       }
 
       // Fallback: This is legacy logic for transition
@@ -1412,75 +1411,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
-      {/* --- 🚀 Sovereign Egress (Withdraw) Modal --- */}
-      {activeModal === 'withdraw' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content max-w-xl border-pink-500/20" onClick={e => e.stopPropagation()}>
-             <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Withdraw Gateway</h2>
-                  <p className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mt-1">Cross-Chain Asset Egress</p>
-                </div>
-                <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
-             </div>
-
-             <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
-                  <div className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase text-center shadow-lg">
-                    NATIVE (Sovereign Output)
-                  </div>
-             </div>
-
-             <div className="space-y-6">
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">External Destination Address</label>
-                   <input 
-                      type="text"
-                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm font-mono text-white placeholder-white/20 focus:border-pink-500/50 outline-none transition-all"
-                      placeholder={`Enter external ${activeWithdrawAsset} address...`}
-                      value={withdrawTargetInput}
-                      onChange={(e) => setWithdrawTargetInput(e.target.value)}
-                   />
-                </div>
-
-                 <div className="space-y-2">
-                    <SovereignInput 
-                       label="Egress Quantity (Network Transfer)"
-                       value={withdrawAmountInput}
-                       onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
-                       asset="NATIVE"
-                       maxAvailable={nativeBalance}
-                       onSetMax={() => setWithdrawAmountInput(nativeBalance)}
-                       subtext="Zero Sovereign Gas Protocol Applied. Secure Network Connection Active."
-                    />
-                 </div>
-
-                {activeWithdrawAsset === 'ETH' && (
-                   <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
-                       <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">L1 Network Fee Estimate</span>
-                       <div className="text-right">
-                           <p className="text-xs font-mono font-bold text-pink-400">
-                               {isEstimatingGas ? <RefreshCw size={10} className="animate-spin inline mr-1" /> : `~${gasFeeEstimate} ETH`}
-                           </p>
-                           <p className="text-[8px] text-white/20 uppercase font-bold tracking-tighter">Real-time Sepolia Node Feed</p>
-                       </div>
-                   </div>
-                )}
-
-                <button 
-                 disabled={withdrawStep !== 'idle'}
-                 onClick={handleSimulateWithdraw}
-                 className={`w-full mt-4 py-4 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-2 ${
-                   withdrawStep === 'success' ? 'bg-amber-500 text-white' : 'bg-pink-600 text-white hover:bg-pink-500'
-                 }`}
-                >
-                  {withdrawStep !== 'idle' ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpRight size={14} />}
-                  {withdrawStep === 'idle' && `Request ${activeWithdrawAsset} Egress`}
-                  {withdrawStep === 'processing' && 'Burning Vault Balance...'}
-                  {withdrawStep === 'confirming' && 'Queueing L1 Relayer...'}
-                  {withdrawStep === 'success' && 'Processing on L1...'}
-                </button>
-             </div>
-          </div>
+      {/* Bridge System Deactivated */}
         </div>
       )}
 
