@@ -322,7 +322,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       }
     };
 
-/* Removed legacy engine sync - All power has been moved to Singularity Cloud */
     syncWithSupabase();
     heartbeat();
     
@@ -331,7 +330,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
     // 📈 Optimistic Reward Counter (Real-time Feedback)
     const optimisticInterval = setInterval(() => {
-        setOptimisticReward(prev => prev + 100000000000000n); // +0.0001 AUR per tick (matches pulse rate)
+        setOptimisticReward(prev => prev + 100000000000000n); 
     }, 10000);
 
     return () => {
