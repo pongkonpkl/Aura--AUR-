@@ -1905,15 +1905,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                              <div className="px-8 py-6 flex-1 text-2xl font-black font-mono text-emerald-400">
                                {(parseFloat(swapAmount || "0") * 10.0 * 0.99).toFixed(2)}
                              </div>
-                             <select 
-                               value={swapTarget}
-                               onChange={e => setSwapTarget(e.target.value as any)}
-                               className="bg-white/5 border-l border-white/10 px-8 font-black text-sm text-white outline-none cursor-pointer hover:bg-white/10 transition-all uppercase tracking-widest"
-                             >
-                               <option value="NATIVE" className="bg-[#0a0a0a]">NATIVE</option>
-                               <option value="BTC" className="bg-[#0a0a0a]">BTC (Aura Wrapped)</option>
-                               <option value="ETH" className="bg-[#0a0a0a]">ETH (Aura Wrapped)</option>
-                             </select>
+                              <div className="bg-white/5 border-l border-white/10 px-10 flex items-center justify-center font-black text-sm text-white uppercase tracking-widest">
+                                NATIVE
+                              </div>
                           </div>
                        </div>
 
@@ -2006,47 +2000,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                      </div>
                   </div>
 
-                  {/* Bitcoin Asset */}
-                  <div className="flex items-center justify-between group/asset">
-                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-500 group-hover/asset:bg-amber-500/20 transition-all border border-amber-500/20">
-                           <Bitcoin size={18} />
-                        </div>
-                        <div>
-                           <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Digital Gold</p>
-                           <p className="text-sm font-black text-white">BTC</p>
-                        </div>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-sm font-black text-amber-500 font-mono">{btcBalance}</p>
-                        <p className="text-[8px] font-bold text-white/10 uppercase tracking-tighter">Aura Wrapped</p>
-                     </div>
-                  </div>
-
-                  {/* Ethereum Asset */}
-                  <div className="flex items-center justify-between group/asset">
-                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400 group-hover/asset:bg-blue-500/20 transition-all border border-blue-500/20">
-                           <Zap size={18} />
-                        </div>
-                        <div>
-                           <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Smart Liquidity</p>
-                           <p className="text-sm font-black text-white">ETH</p>
-                        </div>
-                     </div>
-                     <div className="text-right">
-                      <div className="flex items-center gap-2 justify-end">
-                        <p className="text-sm font-black text-blue-400 font-mono">{ethBalance}</p>
-                        {parseFloat(ethBalance) > 0 && (
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
-                            <Shield size={10} className="text-emerald-400" />
-                            <span className="text-[8px] font-black text-emerald-400 uppercase">Verified</span>
-                          </div>
-                        )}
-                      </div>
-                        <p className="text-[8px] font-bold text-white/10 uppercase tracking-tighter">Aura Wrapped</p>
-                     </div>
-                  </div>
                </div>
 
                <div className="flex gap-3">
@@ -2138,7 +2091,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
         </div>
 
-        <footer className="pt-12 text-center">
+        <footer className="pt-12 text-center pb-20">
+          <div className="mb-4 inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/5 border border-indigo-500/10 rounded-full">
+            <Shield size={12} className="text-indigo-400" />
+            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Sovereign Blockchain Simulator - Internal Research Only</span>
+          </div>
           <p className="text-[10px] text-white/10 tracking-[0.4em] font-mono uppercase">
             Aura: Fahsai Distributed Engine • The Era of Digital Sovereignty
           </p>

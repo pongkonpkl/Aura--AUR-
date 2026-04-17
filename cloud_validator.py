@@ -132,6 +132,9 @@ def process_transaction(payload_src):
             message_variants.append(f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}")
         elif op in ["stake", "unstake"]:
             message_variants.append(f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}")
+        elif op == "swap":
+            target = tx.get("target", "NATIVE")
+            message_variants.append(f"AUR_SWAP:{signed_nonce}:{from_address}:{amount_atom}:{target}")
         
         # Identity verification
         verified = False
@@ -182,6 +185,14 @@ def process_transaction(payload_src):
                 "p_nonce": signed_nonce or expected_nonce, "p_tx_hash_id": tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_withdrawal", headers=headers, json=rpc_payload)
+        
+        elif op == "swap":
+            rpc_payload = {
+                "p_user_address": from_address, "p_amount_aur_atom": amount_atom,
+                "p_target_asset": tx.get("target", "NATIVE"),
+                "p_nonce": signed_nonce or expected_nonce, "p_tx_id": tx_hash_id
+            }
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_swap", headers=headers, json=rpc_payload)
         
         else:
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", f"Unsupported op {op}")
