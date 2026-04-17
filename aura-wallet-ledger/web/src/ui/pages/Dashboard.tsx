@@ -984,6 +984,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   const handleSwap = async () => {
     if (!swapAmount || parseFloat(swapAmount) <= 0) return;
+    addLog(`Quantum Engine: Initiating authorization check for ${swapAmount} AUR...`);
     const action = async () => {
       setIsSwapping(true);
       try {
@@ -991,26 +992,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const currentNonce = await fetchNonce(wallet.address);
         const nextNonce = currentNonce + 1;
 
-        const message = `AUR_SWAP:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom}:${swapTarget}`;
+        addLog(`Vault Signal: Preparing payload for swap. Nonce: ${nextNonce}`);
+        const message = `AUR_SWAP:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom}:NATIVE`;
         const signature = await wallet.signMessage(message);
 
-        addLog(`Initiating Quantum Swap: ${swapAmount} AUR -> ${swapTarget}...`);
+        addLog(`Broadcasting to Cloud: Swaping ${swapAmount} AUR -> NATIVE...`);
         
         // 1% Burn Simulation in UI
         const burnAmount = amountAtom / 100n;
-        const finalReceived = (parseFloat(swapAmount) * 10.0) * 0.99; // 1:10 Rate - 1% Burn
+        const finalReceived = (parseFloat(swapAmount) * 10.0) * 0.99;
 
-        await submitCloudTx('swap', { 
+        const result = await submitCloudTx('swap', { 
           address: wallet.address, 
           amount_atom: amountAtom.toString(), 
-          target: swapTarget,
+          target: 'NATIVE',
           nonce: nextNonce 
         }, signature);
 
         addLog(`🔥 Burn Registered: ${ethers.formatUnits(burnAmount, 18)} AUR incinerated.`);
-        addLog(`✅ Swap Settled. Approximately ${finalReceived.toFixed(4)} ${swapTarget} routed.`);
+        addLog(`✅ Swap Settled. Internal IOU Credited: ${finalReceived.toFixed(4)} NATIVE.`);
         setSwapAmount("");
       } catch (e: any) {
+        console.error("Swap Logic Error:", e);
+        addLog(`❌ Error: ${e.message}`);
         alert(e.message);
       }
       setIsSwapping(false);
@@ -1366,17 +1370,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
              </div>
 
-             <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
-                {['NATIVE', 'BTC', 'ETH'].map((asset) => (
-                  <button 
-                    key={asset}
-                    onClick={() => setActiveDepositAsset(asset as any)}
-                    className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${activeDepositAsset === asset ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
-                  >
-                    {asset}
-                  </button>
-                ))}
-             </div>
+              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
+                  <div className="flex-1 py-3 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase text-center shadow-lg">
+                    NATIVE (Sovereign Input)
+                  </div>
+              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                 <div className="space-y-6">
@@ -1402,33 +1400,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                       </div>
                    </div>
 
-                   <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-2">
-                       <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-2 h-2 rounded-full ${depositStep === 'idle' ? 'bg-indigo-500' : 'bg-emerald-500 animate-pulse'}`} />
-                          <p className="text-[10px] font-black text-white/60 uppercase">Bridge Status: {depositStep.toUpperCase()}</p>
-                       </div>
-                       <p className="text-[10px] text-white/40 leading-relaxed">
-                         {activeDepositAsset === 'BTC' ? (
-                           "Send REAL Bitcoin to this SegWit address. Our Sovereign Bridge monitors the BTC network and will mint Aura-Wrapped BTC directly into your Vault."
-                         ) : (
-                           `To deposit ${activeDepositAsset}, send assets from your external wallet to this gateway. Funds will be automatically wrapped and credited to your Vault.`
-                         )}
-                       </p>
-                   </div>
-
-                   <button 
-                    disabled={depositStep !== 'idle'}
-                    onClick={handleVerifyDeposit}
-                    className={`w-full py-4 font-black text-xs uppercase rounded-xl transition-all flex items-center justify-center gap-2 ${
-                      depositStep === 'success' ? 'bg-emerald-500 text-white' : 'bg-white text-black hover:bg-indigo-100'
-                    }`}
-                   >
-                     {depositStep !== 'idle' && depositStep !== 'success' ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownLeft size={14} />}
-                     {depositStep === 'idle' && `Scan for Real ${activeDepositAsset} Inflow`}
-                     {depositStep === 'waiting' && 'Detecting Network Inflow...'}
-                     {depositStep === 'confirming' && 'Awaiting Pulse Confirmation...'}
-                     {depositStep === 'success' && 'Deposit Finalized!'}
-                   </button>
+                    <div className="p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 text-center">
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Sovereign Protocol Active</p>
+                        <p className="text-[10px] text-white/30 leading-relaxed font-medium">
+                             This QR code represents your Sovereign Identity on the Aura Distributed Ledger. It is the primary cryptographic endpoint for vault synchronization and network presence within your autonomous infrastructure.
+                        </p>
+                    </div>
                 </div>
              </div>
           </div>
@@ -1448,15 +1425,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
              </div>
 
              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
-                {['NATIVE', 'BTC', 'ETH'].map((asset) => (
-                  <button 
-                    key={asset}
-                    onClick={() => setActiveWithdrawAsset(asset as any)}
-                    className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${activeWithdrawAsset === asset ? 'bg-pink-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
-                  >
-                    {asset}
-                  </button>
-                ))}
+                  <div className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase text-center shadow-lg">
+                    NATIVE (Sovereign Output)
+                  </div>
              </div>
 
              <div className="space-y-6">
@@ -1471,17 +1442,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                    />
                 </div>
 
-                <div className="space-y-2">
-                   <SovereignInput 
-                      label="Withdrawal Amount"
-                      value={withdrawAmountInput}
-                      onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
-                      asset={activeWithdrawAsset}
-                      maxAvailable={activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance}
-                      onSetMax={() => setWithdrawAmountInput(activeWithdrawAsset === 'NATIVE' ? nativeBalance : activeWithdrawAsset === 'BTC' ? btcBalance : ethBalance)}
-                      subtext="Zero Sovereign Gas Protocol Applied."
-                   />
-                </div>
+                 <div className="space-y-2">
+                    <SovereignInput 
+                       label="Egress Quantity (Network Transfer)"
+                       value={withdrawAmountInput}
+                       onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
+                       asset="NATIVE"
+                       maxAvailable={nativeBalance}
+                       onSetMax={() => setWithdrawAmountInput(nativeBalance)}
+                       subtext="Zero Sovereign Gas Protocol Applied. Secure Network Connection Active."
+                    />
+                 </div>
 
                 {activeWithdrawAsset === 'ETH' && (
                    <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
@@ -2092,9 +2063,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
 
         <footer className="pt-12 text-center pb-20">
-          <div className="mb-4 inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/5 border border-indigo-500/10 rounded-full">
+          <div className="mb-4 inline-flex items-center gap-2 px-6 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-full">
             <Shield size={12} className="text-indigo-400" />
-            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Sovereign Blockchain Simulator - Internal Research Only</span>
+            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Aura Sovereign Infrastructure • Autonomous Ledger Protocol</span>
           </div>
           <p className="text-[10px] text-white/10 tracking-[0.4em] font-mono uppercase">
             Aura: Fahsai Distributed Engine • The Era of Digital Sovereignty
