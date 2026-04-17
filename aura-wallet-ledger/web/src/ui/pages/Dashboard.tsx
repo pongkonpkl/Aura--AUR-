@@ -268,14 +268,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           });
         }
 
-        // 2. Fetch Authoritative Profile & Balance (Hits exact shard via address)
-        const { data: profile, error: pError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('address', wallet.address.toLowerCase())
-          .single();
+        // 2. Fetch Authoritative Profile & Balance via Singularity Mapper
+        const { data: profile, error: pError } = await supabase.rpc('rpc_get_profile', {
+          p_user_address: wallet.address.toLowerCase()
+        });
 
-        if (pError && pError.code === 'PGRST116') {
+        if (pError || !profile) {
           // Auto-registration logic for new sovereign citizens
           await supabase.rpc('rpc_log_pulse', { p_user_address: wallet.address.toLowerCase() });
         } 
