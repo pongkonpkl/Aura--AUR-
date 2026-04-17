@@ -296,13 +296,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           setIsEngineReady(true);
         }
 
-        // 3. Fetch Sharded Ledger (The Real History)
-        const { data: auraLedger } = await supabase
-          .from('ledger')
-          .select('*')
-          .or(`sender.eq.${wallet.address.toLowerCase()},receiver.eq.${wallet.address.toLowerCase()}`)
-          .order('created_at', { ascending: false })
-          .limit(15);
+        // 3. Fetch Sharded Ledger via Audit Bridge (Fixes Empty Ledger Issue)
+        const { data: auraLedger, error: lError } = await supabase.rpc('rpc_get_ledger', {
+          p_user_address: wallet.address.toLowerCase(),
+          p_limit: 15
+        });
+        
+        if (lError) console.error("Ledger Fetch Error:", lError);
         
         if (auraLedger) setHistory(auraLedger);
 
@@ -444,14 +444,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const checkIdentity = async () => {
       setIsCheckingRecipient(true);
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('nickname')
-          .eq('address', recipient.toLowerCase())
-          .single();
+        const { data, error } = await supabase.rpc('rpc_check_identity', {
+          p_target_address: recipient.toLowerCase()
+        });
+        
+        const profile = Array.isArray(data) ? data[0] : data;
 
-        if (data) {
-          setRecipientProfile({ nick: data.nickname, exists: true });
+        if (profile && profile.is_valid) {
+          setRecipientProfile({ nick: profile.nickname, exists: true });
         } else {
           setRecipientProfile({ exists: false });
         }
@@ -467,15 +467,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   const fetchNonce = async (address: string): Promise<number> => {
     try {
-      // Security Hardening: Prioritize Database-driven Nonce
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('nonce')
-        .eq('address', address.toLowerCase())
-        .single();
+      // Security Hardening: Prioritize Sharded Shard-aware Nonce
+      const { data } = await supabase.rpc('rpc_get_profile', {
+          p_user_address: address.toLowerCase()
+      });
       
-      if (profile && profile.nonce !== null) {
-        return Number(profile.nonce);
+      const profile = Array.isArray(data) ? data[0] : data;
+      
+      if (profile && profile.last_nonce !== undefined) {
+        return Number(profile.last_nonce);
       }
 
       // Fallback: This is legacy logic for transition
