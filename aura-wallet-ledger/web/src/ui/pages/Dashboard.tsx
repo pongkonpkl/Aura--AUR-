@@ -278,15 +278,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           await supabase.rpc('rpc_log_pulse', { p_user_address: wallet.address.toLowerCase() });
         } 
 
-        if (profile) {
-          const serverBalance = BigInt(profile.balance_atom || "0");
-          const serverStaked = BigInt(profile.staked_balance_atom || "0");
-          if (profile.pending_reward_atom) setPendingRewardAtom(profile.pending_reward_atom);
+        // RPC returns an array for Table-returning functions
+        const serverProfile = Array.isArray(profile) ? profile[0] : profile;
+
+        if (serverProfile) {
+          const serverBalance = BigInt(serverProfile.balance_atom || "0");
+          const serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
+          if (serverProfile.pending_reward_atom) setPendingRewardAtom(serverProfile.pending_reward_atom);
 
           // Sync Multi-Vault Assets
-          setNativeBalance(profile.native_balance != null ? Number(profile.native_balance).toFixed(2) : "0.00");
-          setBtcBalance(profile.btc_balance != null ? Number(profile.btc_balance).toFixed(3) : "0.000");
-          setEthBalance(profile.eth_balance != null ? Number(profile.eth_balance).toFixed(6) : "0.000000");
+          setNativeBalance(serverProfile.native_balance != null ? Number(serverProfile.native_balance).toFixed(2) : "0.00");
+          setBtcBalance(serverProfile.btc_balance != null ? Number(serverProfile.btc_balance).toFixed(3) : "0.000");
+          setEthBalance(serverProfile.eth_balance != null ? Number(serverProfile.eth_balance).toFixed(6) : "0.000000");
           
           setBalanceAtom(serverBalance.toString());
           setStakedBalanceAtom(serverStaked.toString());
