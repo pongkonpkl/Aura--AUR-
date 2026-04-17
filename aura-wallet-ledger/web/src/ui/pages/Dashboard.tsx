@@ -62,7 +62,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [totalEmission, setTotalEmission] = useState<string>("0");
   const [dailyEmission, setDailyEmission] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
-  const [pendingTxs, setPendingTxs] = useState<{hash: string, amount: bigint, type: string}[]>([]);
+  const [pendingTxs, setPendingTxs] = useState<any[]>([]);
+  const pendingTxsRef = useRef<any[]>([]);
+  
+  // Sync Ref with State for use in Intervals (Prevents Stale Closures)
+  useEffect(() => {
+    pendingTxsRef.current = pendingTxs;
+  }, [pendingTxs]);
   const [history, setHistory] = useState<any[]>([]);
   const [lastCloudOpTime, setLastCloudOpTime] = useState<number>(Date.now());
   const [recipientProfile, setRecipientProfile] = useState<{nick?: string, exists: boolean} | null>(null);
@@ -286,10 +292,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           let serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
           if (serverProfile.pending_reward_atom) setPendingRewardAtom(serverProfile.pending_reward_atom);
 
-          // Apply Optimistic Offsets (Prevent Bouncing while Cloud Settles)
-          const pendingStake = pendingTxs.filter(t => t.type === 'stake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
-          const pendingUnstake = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
-          const pendingOut = pendingTxs.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          // Apply Optimistic Offsets (Using Ref to prevent Stale Closure/Bouncing)
+          const currentPending = pendingTxsRef.current;
+          const pendingStake = currentPending.filter(t => t.type === 'stake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          const pendingUnstake = currentPending.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          const pendingOut = currentPending.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
 
           // Adjusted view for the user
           const displayBalance = serverBalance - pendingStake + pendingUnstake - pendingOut;
