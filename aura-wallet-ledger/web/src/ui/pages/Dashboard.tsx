@@ -480,8 +480,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
       // Fallback: This is legacy logic for transition
       const resp = await fetch(`${LOCAL_ENGINE_URL}/nonce?address=${address}`);
-      const data = await resp.json();
-      return data.nonce;
+      const fallbackData = await resp.json(); 
+      return fallbackData.nonce;
     } catch (e) {
       // Deep Fallback: Cloud Ledger JSON
       try {
