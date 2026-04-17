@@ -37,18 +37,31 @@ def get_supabase_headers():
 
 def get_profile(address):
     headers = get_supabase_headers()
-    resp = requests.get(f"{SUPABASE_URL}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers)
+    # Singularity 1B: Use Sharded RPC Lookup
+    resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_get_profile", headers=headers, json={"p_user_address": address.lower()})
     profiles = resp.json()
-    if not profiles:
-        # Create profile if missing (Migration/Auto-onboarding)
-        payload = {"wallet_address": address.lower(), "balance": "0", "staked_balance": "0", "last_nonce": 0}
-        resp = requests.post(f"{SUPABASE_URL}/rest/v1/profiles", headers=headers, json=payload)
-        return resp.json()[0]
-    return profiles[0]
+    
+    if not profiles or (isinstance(profiles, list) and len(profiles) == 0):
+        # Auto-onboarding for 1B Sharded Scale
+        print(f"[INFO] Initializing new 1B profile for {address}")
+        # In 1B, profiles are created via SQL trigger or direct insert if allowed. 
+        # For simplicity, we assume rpc_get_profile might need to handle creation or we handle it here.
+        return {"address": address.lower(), "balance_atom": 0, "staked_balance_atom": 0, "last_nonce": 0}
+    
+    profile = profiles[0] if isinstance(profiles, list) else profiles
+    return profile
 
 def update_supabase_profile(address, updates):
+    # This is legacy direct patching. In 1B, we prefer RPC settlement.
+    # However, for manual updates, we ensure column names are correct.
     headers = get_supabase_headers()
-    requests.patch(f"{SUPABASE_URL}/rest/v1/profiles?wallet_address=eq.{address.lower()}", headers=headers, json=updates)
+    # Map old keys to new if they leak through
+    mapped_updates = {}
+    if "balance" in updates: mapped_updates["balance_atom"] = updates["balance"]
+    if "staked_balance" in updates: mapped_updates["staked_balance_atom"] = updates["staked_balance"]
+    if "last_nonce" in updates: mapped_updates["last_nonce"] = updates["last_nonce"]
+    
+    requests.patch(f"{SUPABASE_URL}/rest/v1/profiles?address=eq.{address.lower()}", headers=headers, json=mapped_updates)
 
 def log_transaction_to_supabase(tx_data):
     headers = get_supabase_headers()

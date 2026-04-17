@@ -98,7 +98,9 @@ if __name__ == "__main__":
         exit(1)
 
     # 1. Distribute rewards (The "Pulse")
+    # Singularity 1B: High-speed Sharded Distribution
     run_distribution()
 
-    # 2. Sync for transparency
-    sync_ledger()
+    print("Sovereign Distribution Pulse completed successfully.")
+    # 2. Sync for transparency (DISABLED for 1B Scale - ledger.json is too large for GitHub)
+    # sync_ledger() 

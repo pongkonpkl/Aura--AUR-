@@ -282,17 +282,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const serverProfile = Array.isArray(profile) ? profile[0] : profile;
 
         if (serverProfile) {
-          const serverBalance = BigInt(serverProfile.balance_atom || "0");
-          const serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
+          let serverBalance = BigInt(serverProfile.balance_atom || "0");
+          let serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
           if (serverProfile.pending_reward_atom) setPendingRewardAtom(serverProfile.pending_reward_atom);
+
+          // Apply Optimistic Offsets (Prevent Bouncing while Cloud Settles)
+          const pendingStake = pendingTxs.filter(t => t.type === 'stake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          const pendingUnstake = pendingTxs.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          const pendingOut = pendingTxs.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+
+          // Adjusted view for the user
+          const displayBalance = serverBalance - pendingStake + pendingUnstake - pendingOut;
+          const displayStaked = serverStaked + pendingStake - pendingUnstake;
 
           // Sync Multi-Vault Assets
           setNativeBalance(serverProfile.native_balance != null ? Number(serverProfile.native_balance).toFixed(2) : "0.00");
           setBtcBalance(serverProfile.btc_balance != null ? Number(serverProfile.btc_balance).toFixed(3) : "0.000");
           setEthBalance(serverProfile.eth_balance != null ? Number(serverProfile.eth_balance).toFixed(6) : "0.000000");
           
-          setBalanceAtom(serverBalance.toString());
-          setStakedBalanceAtom(serverStaked.toString());
+          setBalanceAtom(displayBalance.toString());
+          setStakedBalanceAtom(displayStaked.toString());
           setIsEngineReady(true);
         }
 
