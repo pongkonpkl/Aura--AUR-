@@ -139,7 +139,7 @@ BEGIN
             last_nonce = p_nonce
         WHERE id = v_profile_id;
         
-        UPDATE network_state SET total_staked_global = total_staked_global + p_amount_atom;
+        UPDATE network_state SET total_staked_global = total_staked_global + p_amount_atom WHERE true;
 
     ELSIF p_op = 'unstake' THEN
         IF v_staked < p_amount_atom THEN RETURN jsonb_build_object('success', false, 'error', 'Insufficient stake'); END IF;
@@ -150,7 +150,7 @@ BEGIN
             last_nonce = p_nonce
         WHERE id = v_profile_id;
 
-        UPDATE network_state SET total_staked_global = total_staked_global - p_amount_atom;
+        UPDATE network_state SET total_staked_global = total_staked_global - p_amount_atom WHERE true;
     END IF;
 
     INSERT INTO validators (wallet_address, voting_power)
@@ -198,7 +198,8 @@ BEGIN
         UPDATE network_state SET 
             global_reward_index = global_reward_index + v_index_delta,
             last_dist_time = NOW(),
-            updated_at = NOW();
+            updated_at = NOW()
+        WHERE true;
             
         INSERT INTO distributions (amount, dist_type) 
         VALUES (v_total_reward_atom, 'enterprise_pulse_v3');
