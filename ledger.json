@@ -44,6 +44,16 @@
   },
   "history": [
     {
+      "id": "254677f6-faea-4d6b-a364-1e0f31ca82db",
+      "tx_hash": "queued-1776406060843-lulgdl",
+      "from_address": "0x0aa81e8daf1ef9e9a2a62b043bfe9323b71bf253",
+      "to_address": "System",
+      "amount_atom": 5000000000000000000,
+      "tx_type": "stake",
+      "created_at": "2026-04-17T06:07:41.624585+00:00",
+      "cloud_validated": true
+    },
+    {
       "id": "14baa168-f191-4808-9b90-d0bc999a3458",
       "tx_hash": "queued-1776365179886-kt3wi",
       "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
