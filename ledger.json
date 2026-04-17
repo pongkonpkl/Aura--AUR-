@@ -8,7 +8,7 @@
   "symbol": "AUR",
   "decimals": 18,
   "last_mint": "2026-04-17",
-  "total_supply": "28273121683929398760",
+  "total_supply": "28272121683929398760",
   "nonces": {
     "ngwz29yswq86xg39zvwg2f6yth9uvfydgtkrwvty1awk7wdeaf": "0",
     "0x0aa81e8daf1ef9e9a2a62b043bfe9323b71bf253": "3",
@@ -18,7 +18,8 @@
     "0x6ef6af283127d881cef76587a83378e86701c87f": "0",
     "0x0fa66745f5f03cb4d7b3acdc8f4f8b84e0861090": "0",
     "0x1719a50eec8f15bc12a7955e5e98cd46b324f05b": "0",
-    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "10"
+    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "11",
+    "0xdef092af8138db03e83664df86dddbf2acb2f134": "0"
   },
   "balances": {
     "ngwz29yswq86xg39zvwg2f6yth9uvfydgtkrwvty1awk7wdeaf": "1000000000000000000",
@@ -29,7 +30,8 @@
     "0x6ef6af283127d881cef76587a83378e86701c87f": "1.3860684532261453E+18",
     "0x0fa66745f5f03cb4d7b3acdc8f4f8b84e0861090": "1.3860684532261453E+18",
     "0x1719a50eec8f15bc12a7955e5e98cd46b324f05b": "990000000000000",
-    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "4.260964676373708E+17"
+    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "3.260964676373708E+17",
+    "0xdef092af8138db03e83664df86dddbf2acb2f134": "99000000000000000"
   },
   "staked_balances": {
     "ngwz29yswq86xg39zvwg2f6yth9uvfydgtkrwvty1awk7wdeaf": "0",
@@ -40,9 +42,20 @@
     "0x6ef6af283127d881cef76587a83378e86701c87f": "428571428571428570",
     "0x0fa66745f5f03cb4d7b3acdc8f4f8b84e0861090": "428571428571428570",
     "0x1719a50eec8f15bc12a7955e5e98cd46b324f05b": "0",
-    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "1548671428571428570"
+    "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8": "1548671428571428570",
+    "0xdef092af8138db03e83664df86dddbf2acb2f134": "0"
   },
   "history": [
+    {
+      "id": "7fa08185-c448-43c0-b899-cb73d8f14dda",
+      "tx_hash": "queued-1776450166414-ncewga",
+      "from_address": "0x156cf51f218b97181c8ddad12e7d9298c1cc63e8",
+      "to_address": "0xdef092af8138db03e83664df86dddbf2acb2f134",
+      "amount_atom": 100000000000000000,
+      "tx_type": "transfer",
+      "created_at": "2026-04-17T18:22:45.08666+00:00",
+      "cloud_validated": true
+    },
     {
       "id": "2e0bccc7-d50d-43f7-a3f0-4b06ee88e626",
       "tx_hash": "queued-1776435879432-3fs4bj",
@@ -95,5 +108,5 @@
     }
   ],
   "total_staked": "11658771428571428560",
-  "last_sync": "2026-04-17T15:56:36.585119"
+  "last_sync": "2026-04-17T18:54:31.022307"
 }
