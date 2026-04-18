@@ -178,10 +178,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           p_user_address: wallet.address.toLowerCase()
         });
 
-        if (pError || !profile) {
-          // Auto-registration logic for new sovereign citizens
-          await supabase.rpc('rpc_log_pulse', { p_user_address: wallet.address.toLowerCase() });
-        } 
+        if (pError) {
+          addLog(`Singularity Sync Error: ${pError.message || pError.code}`);
+          console.error("Profile Fetch Error:", pError);
+        }
 
         // RPC returns an array for Table-returning functions
         const serverProfile = Array.isArray(profile) ? profile[0] : profile;
@@ -226,8 +226,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         if (error) throw error;
         setOptimisticReward(0n); // Reset optimistic accumulation after real sync
         addLog(`Sovereign Pulse: Synchronized to Cloud Validator (Reward Accumulated).`);
-      } catch (e) {
-        addLog("Cloud Pulse failed. Check internet connection.");
+      } catch (e: any) {
+        addLog(`Cloud Pulse failed: ${e.message || e.code || "Connection Error"}`);
       }
     };
 
