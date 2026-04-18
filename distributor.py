@@ -92,15 +92,58 @@ def sync_ledger():
     except Exception as e:
         print(f"Error during ledger sync: {e}")
 
+def update_global_stats():
+    """
+    Singularity 1B: Aggregate all sovereign metrics and push to global stats monitor.
+    """
+    print(f"[{datetime.now()}] Aggregating global network metrics...")
+    try:
+        # 1. Fetch all balances for aggregation
+        headers = get_headers()
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/profiles?select=balance_atom,staked_balance_atom",
+            headers=headers
+        )
+        if resp.status_code != 200:
+            print(f"Failed to fetch profiles for aggregation: {resp.text}")
+            return
+
+        profiles = resp.json()
+        total_supply_atom = sum(int(p.get('balance_atom') or 0) + int(p.get('staked_balance_atom') or 0) for p in profiles)
+        
+        # 2. Daily Mined (Pulse) is fixed at 1 AUR per day according to whitepaper
+        daily_pulse_atom = 1000000000000000000 # 1.0 AUR
+        total_wallets = len(profiles)
+
+        # 3. Update sovereign_stats table
+        stats_payload = {
+            "total_supply_atom": str(total_supply_atom),
+            "daily_mined_atom": str(daily_pulse_atom)
+        }
+        
+        stats_resp = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/sovereign_stats?id=eq.global",
+            headers=headers,
+            json=stats_payload
+        )
+        
+        if stats_resp.status_code in [200, 201, 204]:
+            print(f"Global Stats Updated Successfully. Supply: {total_supply_atom/1e18} AUR")
+        else:
+            print(f"Failed to update global stats: {stats_resp.text}")
+
+    except Exception as e:
+        print(f"Error during metric aggregation: {e}")
+
 if __name__ == "__main__":
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("Error: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.")
         exit(1)
 
     # 1. Distribute rewards (The "Pulse")
-    # Singularity 1B: High-speed Sharded Distribution
     run_distribution()
 
+    # 2. Update Global Monitor Metrics
+    update_global_stats()
+
     print("Sovereign Distribution Pulse completed successfully.")
-    # 2. Sync for transparency (DISABLED for 1B Scale - ledger.json is too large for GitHub)
-    # sync_ledger() 

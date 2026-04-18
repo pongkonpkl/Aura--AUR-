@@ -333,8 +333,22 @@ async def get_nonce(address: str):
 
 @app.get("/network-stats")
 def get_network_stats():
-    active_count = sum(1 for ts in get_nodes().get("presence", {}).values() if (datetime.utcnow() - datetime.fromisoformat(ts.replace("Z", ""))).total_seconds() < 86400)
-    return {"active_nodes": max(1, active_count), "total_mint_per_day": "1000000000000000000"}
+    ledger = load_json(LEDGER_FILE)
+    balances = ledger.get("balances", {})
+    staked = ledger.get("staked_balances", {})
+    
+    # Calculate Sum
+    total_supply_atom = sum(int(v) if isinstance(v, str) and v.isdigit() else 0 for v in balances.values())
+    total_supply_atom += sum(int(v) if isinstance(v, str) and v.isdigit() else 0 for v in staked.values())
+    
+    nodes = get_nodes()
+    active_count = sum(1 for ts in nodes.get("presence", {}).values() if (datetime.utcnow() - datetime.fromisoformat(ts.replace("Z", ""))).total_seconds() < 86400)
+    
+    return {
+        "active_nodes": max(1, active_count),
+        "total_supply_atom": str(total_supply_atom),
+        "total_mint_per_day": "1000000000000000000" # 1.0 AUR
+    }
 
 @app.on_event("startup")
 async def startup_event(): asyncio.create_task(midnight_mint_task())
