@@ -90,6 +90,9 @@ def process_transaction(payload_src):
         except Exception as e:
             print(f"[ERROR] Invalid payload JSON: {e}")
             return False
+    else:
+        data = payload_src
+
     if not data or not isinstance(data, dict):
         print(f"[ERROR] Malformed transaction record: {payload_src}")
         return False
