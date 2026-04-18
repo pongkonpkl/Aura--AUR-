@@ -44,7 +44,7 @@ const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax,
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | 'challenge' | 'deposit' | 'withdraw' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | null>(null);
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
@@ -77,105 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [optimisticReward, setOptimisticReward] = useState<bigint>(0n);
   const [isClaiming, setIsClaiming] = useState(false);
 
-  // Sovereign Seed Challenge (MFA) States
-  const [challengeIndex, setChallengeIndex] = useState<number | null>(null);
-  const [challengeInput, setChallengeInput] = useState("");
-  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
-  const [challengeError, setChallengeError] = useState(false);
 
-  const [activeDepositAsset, setActiveDepositAsset] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
-  const [isSimulatingDeposit, setIsSimulatingDeposit] = useState(false);
-  const [depositStep, setDepositStep] = useState<'idle' | 'waiting' | 'confirming' | 'success'>('idle');
-  const [activeWithdrawAsset, setActiveWithdrawAsset] = useState<'NATIVE' | 'BTC' | 'ETH'>('NATIVE');
-  const [withdrawStep, setWithdrawStep] = useState<'idle' | 'processing' | 'confirming' | 'success'>('idle');
-  const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
-  const [withdrawTargetInput, setWithdrawTargetInput] = useState("");
-  const [gasFeeEstimate, setGasFeeEstimate] = useState<string>("0.00");
-  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
-  const [activeBridgeTxId, setActiveBridgeTxId] = useState<string | null>(null);
-
-  // --- 🛰️ Sovereign Bridge Utilities ---
-  const getGatewayAddress = (asset: string) => {
-    if (asset === 'NATIVE') return wallet.address;
-    if (asset === 'BTC') {
-      return `bc1q${wallet.address.toLowerCase().slice(2, 22)}aura`;
-    }
-    if (asset === 'ETH') {
-      // Professional Gateway Address (Sovereign Receiver)
-      return "0x156cF51F218B97181C8DDAd12e7D9298C1cc63E8";
-    }
-    return wallet.address;
-  };
-
-  // --- 🛰️ Legacy Bridge Deactivated ---
-
-  const handleBridgeEgress = async () => {
-    if (!withdrawAmountInput || !withdrawTargetInput) return;
-    
-    const action = async () => {
-      setWithdrawStep('processing');
-      try {
-        const amountAtom = ethers.parseUnits(withdrawAmountInput, 18);
-        const currentNonce = await fetchNonce(wallet.address);
-        const nextNonce = currentNonce + 1;
-
-        addLog(`Sovereign Protocol: Preparing Egress for ${withdrawAmountInput} AUR...`);
-        
-        // Cryptographic Egress Message
-        const message = `AUR_EGRESS:${nextNonce}:${wallet.address.toLowerCase()}:${withdrawTargetInput.toLowerCase()}:${amountAtom}`;
-        const signature = await wallet.signMessage(message);
-
-        addLog("Settlement: Authorized Burn Protocol via Signature.");
-        
-        const { data, error } = await supabase.rpc('rpc_settle_egress', {
-          p_user_address: wallet.address.toLowerCase(),
-          p_target_evm_address: withdrawTargetInput.toLowerCase(),
-          p_amount_atom: amountAtom.toString(),
-          p_signature: signature,
-          p_nonce: nextNonce
-        });
-
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error);
-
-        setWithdrawStep('success');
-        addLog(`🔥 Burn Finalized: ${withdrawAmountInput} AUR removed from Ledger.`);
-        addLog(`📡 Bridge Signal: Egress queued for MetaMask (${withdrawTargetInput.slice(0,6)}...)`);
-        
-        // Update local state optimistically
-        setBalanceAtom((prev) => (BigInt(prev) - amountAtom).toString());
-        setWithdrawAmountInput("");
-        
-        setTimeout(() => {
-          setWithdrawStep('idle');
-          setActiveModal(null);
-        }, 4000);
-
-      } catch (e: any) {
-        addLog(`❌ Egress Error: ${e.message}`);
-        console.error("Egress Failed:", e);
-        setWithdrawStep('idle');
-      }
-    };
-    wrapWithChallenge(action);
-  };
-
-  const [nativeBalance, setNativeBalance] = useState("0.00");
-  const [btcBalance, setBtcBalance] = useState("0.000");
-  const [ethBalance, setEthBalance] = useState("0.00");
-
-
-  const isValidAddress = recipient ? ethers.isAddress(recipient.toLowerCase()) : null;
-  const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
-
-  const hasLoggedRegistration = useRef(false);
-  const hasLoggedDiscovery = useRef(false);
-
-  const IS_HTTPS = window.location.protocol === 'https:';
-  const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
-  const LOCAL_ENGINE_URL = "http://localhost:8000";
-
-  const MOCK_SEED = wallet.mnemonic?.phrase?.split(' ') || [];
   const [logs, setLogs] = useState<string[]>([
     'Quantum presence verified...',
     'Broadcasting sovereign heartbeats...',
@@ -386,65 +288,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return () => clearInterval(interval);
   }, [pendingTxs]);
 
-  // ☁️ Production Cloud Service Listener (Real-time Bridge Sync)
-  useEffect(() => {
-    if (!activeBridgeTxId) return;
-
-    const channel = supabase.channel('bridge-realtime')
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'transactions',
-        filter: `id=eq.${activeBridgeTxId}`
-      }, (payload) => {
-          const updatedTx = payload.new;
-          if (updatedTx.status === 'success') {
-              setWithdrawStep('success');
-              addLog(`✅ L1 SETTLEMENT ACHIEVED! Hash: ${updatedTx.tx_hash.slice(0,10)}...`);
-              toast.success("Bridge Transfer Successful!");
-              setTimeout(() => {
-                  setActiveBridgeTxId(null);
-                  setWithdrawStep('idle');
-                  setWithdrawAmountInput("");
-                  setWithdrawTargetInput("");
-                  setActiveModal(null);
-              }, 3000);
-          } else if (updatedTx.status === 'failed') {
-              setWithdrawStep('idle');
-              setActiveBridgeTxId(null);
-              addLog(`❌ L1 SETTLEMENT FAILED: ${updatedTx.error_log}`);
-              toast.error("Bridge Transfer Failed. Balance Refunded.");
-          }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [activeBridgeTxId]);
-
-  // ⛽ Real-time L1 Gas Price Estimator
-  useEffect(() => {
-    if (activeModal !== 'withdraw' || activeWithdrawAsset !== 'ETH') return;
-
-    const estimateGas = async () => {
-        setIsEstimatingGas(true);
-        try {
-            const provider = new ethers.JsonRpcProvider("https://eth-sepolia.g.alchemy.com/v2/demo");
-            const feeData = await provider.getFeeData();
-            if (feeData.gasPrice) {
-                // Typical L1 Transfer is 21,000 gas
-                const estimate = ethers.formatUnits(feeData.gasPrice * 21000n, 18);
-                setGasFeeEstimate(parseFloat(estimate).toFixed(6));
-            }
-        } catch (e) {
-            console.error("Gas estimation error:", e);
-        }
-        setIsEstimatingGas(false);
-    };
-
-    estimateGas();
-    const interval = setInterval(estimateGas, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, [activeModal, activeWithdrawAsset]);
 
   // 🛡️ Smart Identity Verification Loop
   useEffect(() => {
@@ -535,224 +378,131 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return tx_hash;
   };
 
-  const handleClaim = async () => {
-    const action = async () => {
-        setIsClaiming(true);
-        try {
-          const currentNonce = await fetchNonce(wallet.address);
-          const nextNonce = currentNonce + 1;
-
-          const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
-          const signature = await wallet.signMessage(message);
-          
-           const { data, error } = await supabase.rpc('rpc_claim_rewards', {
-              p_user_address: wallet.address.toLowerCase(),
-              p_signature: signature,
-              p_nonce: nextNonce
-           });
-           
-           if (error) throw error;
-           if (!data.success) throw new Error(data.error);
-
-           addLog(`✅ Reward Claimed: ${ethers.formatUnits(data.claimed_amount, 18)} AUR`);
-           setPendingRewardAtom("0");
-           setOptimisticReward(0n);
-           setBalanceAtom((BigInt(balanceAtom) + BigInt(data.claimed_amount)).toString());
-           setLastCloudOpTime(Date.now());
-        } catch(e: any) {
-          addLog(`❌ Claim Error: ${e.message}`);
-        }
-        setIsClaiming(false);
-    };
-    wrapWithChallenge(action);
-  };
-
-  const triggerSovereignChallenge = (action: () => Promise<void>) => {
-    const randomIndex = Math.floor(Math.random() * 12); // 0-11
-    setChallengeIndex(randomIndex);
-    setChallengeInput("");
-    setChallengeError(false);
-    setPendingAction(() => action);
-    setActiveModal('cloud'); // We'll repurpose the cloud modal or create a new 'challenge' one
-    // Let's actually use a new 'challenge' state for activeModal
-    setActiveModal(null); // Close current first
-    setTimeout(() => {
-        setChallengeIndex(randomIndex);
-        setChallengeInput("");
-        setPendingAction(() => action);
-        // We need 'challenge' in the activeModal type
-    }, 10);
-  };
-
-  const handleVerifyChallenge = async () => {
-    if (challengeIndex === null) return;
-    const correctWord = MOCK_SEED[challengeIndex!].toLowerCase().trim();
-    if (challengeInput.toLowerCase().trim() === correctWord) {
-        setChallengeError(false);
-        setActiveModal(null);
-        if (pendingAction) {
-            await pendingAction();
-            setPendingAction(null);
-        }
-    } else {
-        setChallengeError(true);
-        addLog("❌ Sovereign Challenge Failed: Security Breach Prevented.");
-    }
-  };
-
-  const wrapWithChallenge = (action: () => Promise<void>) => {
-    const randomIndex = Math.floor(Math.random() * 12);
-    setChallengeIndex(randomIndex);
-    setChallengeInput("");
-    setChallengeError(false);
-    setPendingAction(() => action);
-    setActiveModal('challenge');
-  };
 
   const handleSend = async () => {
     if(!recipient || !sendAmount) return;
-    
-    const action = async () => {
-        setIsSending(true);
-        try {
-            const amountAtom = ethers.parseUnits(sendAmount, 18);
-            const currentNonce = await fetchNonce(wallet.address);
-            const nextNonce = currentNonce + 1;
-            
-            const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
-            const signature = await wallet.signMessage(message);
-            
-            const txHash = await submitCloudTx('transfer', { 
-                from_address: wallet.address.toLowerCase(), 
-                to_address: recipient.toLowerCase(), 
-                amount_atom: amountAtom.toString(),
-                nonce: nextNonce 
-            }, signature);
-            
-            addLog(`Cloud Send Sent. Awaiting validation.`);
-            setLastCloudOpTime(Date.now());
-            setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-            setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
-            
-            setRecipient("");
-            setSendAmount("");
-        } catch(e: any) {
-            alert(e.message);
-        }
-        setIsSending(false);
-    };
-
-    wrapWithChallenge(action);
+    setIsSending(true);
+    try {
+        const amountAtom = ethers.parseUnits(sendAmount, 18);
+        const currentNonce = await fetchNonce(wallet.address);
+        const nextNonce = currentNonce + 1;
+        
+        const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
+        const signature = await wallet.signMessage(message);
+        
+        const txHash = await submitCloudTx('transfer', { 
+            from_address: wallet.address.toLowerCase(), 
+            to_address: recipient.toLowerCase(), 
+            amount_atom: amountAtom.toString(),
+            nonce: nextNonce 
+        }, signature);
+        
+        addLog(`Cloud Send Sent. Awaiting validation.`);
+        setLastCloudOpTime(Date.now());
+        setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+        setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'transfer' }]);
+        
+        setRecipient("");
+        setSendAmount("");
+    } catch(e: any) {
+        alert(e.message);
+    }
+    setIsSending(false);
   };
 
   const handleStake = async () => {
     if(!stakeAmount) return;
-    const action = async () => {
-        setIsStaking(true);
-        try {
-          const amountAtom = ethers.parseUnits(stakeAmount, 18);
-          if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
-          
-          const currentNonce = await fetchNonce(wallet.address);
-          const nextNonce = currentNonce + 1;
+    setIsStaking(true);
+    try {
+      const amountAtom = ethers.parseUnits(stakeAmount, 18);
+      if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
+      
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
 
-          const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-          const signature = await wallet.signMessage(message);
-          
-          const txHash = await submitCloudTx('stake', { 
-              address: wallet.address.toLowerCase(), 
-              amount_atom: amountAtom.toString(), 
-              nonce: nextNonce 
-          }, signature);
-          
-          addLog(`Cloud Stake Sent. Awaiting Sovereign Fleet validation.`);
-          setLastCloudOpTime(Date.now());
-          
-          setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
-          setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
-          setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
-          
-          setStakeAmount("");
-        } catch(e: any) {
-          alert(e.message);
-        }
-        setIsStaking(false);
-    };
-    wrapWithChallenge(action);
+      const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      const signature = await wallet.signMessage(message);
+      
+      const txHash = await submitCloudTx('stake', { 
+          address: wallet.address.toLowerCase(), 
+          amount_atom: amountAtom.toString(), 
+          nonce: nextNonce 
+      }, signature);
+      
+      addLog(`Cloud Stake Sent. Awaiting Sovereign Fleet validation.`);
+      setLastCloudOpTime(Date.now());
+      
+      setBalanceAtom((BigInt(balanceAtom) - amountAtom).toString());
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) + amountAtom).toString());
+      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'stake' }]);
+      
+      setStakeAmount("");
+    } catch(e: any) {
+      alert(e.message);
+    }
+    setIsStaking(false);
   };
   
   const handleUnstake = async () => {
     if(!stakeAmount) return;
-    const action = async () => {
-        setIsStaking(true);
-        try {
-          const amountAtom = ethers.parseUnits(stakeAmount, 18);
-          if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
-          
-          const currentNonce = await fetchNonce(wallet.address);
-          const nextNonce = currentNonce + 1;
+    setIsStaking(true);
+    try {
+      const amountAtom = ethers.parseUnits(stakeAmount, 18);
+      if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
+      
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
 
-          const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-          const signature = await wallet.signMessage(message);
-          
-          const txHash = await submitCloudTx('unstake', { 
-              address: wallet.address.toLowerCase(), 
-              amount_atom: amountAtom.toString(), 
-              nonce: nextNonce 
-          }, signature);
-          
-          addLog(`Unstake request broadcasted to Sovereign Fleet.`);
-          setLastCloudOpTime(Date.now());
-          
-          setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
-          setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
-          setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
-          setStakeAmount("");
-        } catch(e: any) {
-          alert(e.message);
-        }
-        setIsStaking(false);
-    };
-    wrapWithChallenge(action);
+      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      const signature = await wallet.signMessage(message);
+      
+      const txHash = await submitCloudTx('unstake', { 
+          address: wallet.address.toLowerCase(), 
+          amount_atom: amountAtom.toString(), 
+          nonce: nextNonce 
+      }, signature);
+      
+      addLog(`Unstake request broadcasted to Sovereign Fleet.`);
+      setLastCloudOpTime(Date.now());
+      
+      setStakedBalanceAtom((BigInt(stakedBalanceAtom) - amountAtom).toString());
+      setBalanceAtom((BigInt(balanceAtom) + amountAtom).toString());
+      setPendingTxs(prev => [...prev, { hash: txHash, amount: amountAtom, type: 'unstake' }]);
+      setStakeAmount("");
+    } catch(e: any) {
+      alert(e.message);
+    }
+    setIsStaking(false);
   };
 
 
-  const handleWithdraw = async () => {
-    if (BigInt(balanceAtom) <= 0n) {
-      addLog("❌ Nothing to withdraw from Celestial Treasury.");
-      return;
+  const handleClaim = async () => {
+    setIsClaiming(true);
+    try {
+      const currentNonce = await fetchNonce(wallet.address);
+      const nextNonce = currentNonce + 1;
+
+      const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
+      const signature = await wallet.signMessage(message);
+      
+       const { data, error } = await supabase.rpc('rpc_claim_rewards', {
+          p_user_address: wallet.address.toLowerCase(),
+          p_signature: signature,
+          p_nonce: nextNonce
+       });
+       
+       if (error) throw error;
+       if (!data.success) throw new Error(data.error);
+
+       addLog(`✅ Reward Claimed: ${ethers.formatUnits(data.claimed_amount, 18)} AUR`);
+       setPendingRewardAtom("0");
+       setOptimisticReward(0n);
+       setBalanceAtom((BigInt(balanceAtom) + BigInt(data.claimed_amount)).toString());
+       setLastCloudOpTime(Date.now());
+    } catch(e: any) {
+      addLog(`❌ Claim Error: ${e.message}`);
     }
-    const action = async () => {
-      setIsClaiming(true);
-      try {
-        addLog(`Pushing Withdrawal Signal to Supabase High-Speed Queue...`);
-        
-        const currentNonce = await fetchNonce(wallet.address);
-        const nextNonce = currentNonce + 1;
-        const message = `AUR_WITHDRAW_RPC:${nextNonce}:${wallet.address.toLowerCase()}:${balanceAtom}`;
-        const signature = await wallet.signMessage(message);
-
-        // High-Speed RPC Call to Supabase
-        const { error } = await supabase.rpc('queue_withdrawal', {
-            user_wallet: wallet.address.toLowerCase(),
-            amount_val: balanceAtom.toString(), 
-            sig: signature
-        });
-
-        if (error) throw error;
-
-        // Optimistic UI Update: Make it feel instant
-        const withdrawnAmount = ethers.formatUnits(balanceAtom, 18);
-        setBalanceAtom("0");
-        addLog(`✅ Signal Sent! ${withdrawnAmount} AUR is being bridged to your MetaMask via Cloud Validator.`);
-        setLastCloudOpTime(Date.now());
-        
-      } catch (e: any) {
-        addLog(`❌ High-Speed Queue Error: ${e.message}`);
-      }
-      setIsClaiming(false);
-    };
-    wrapWithChallenge(action);
+    setIsClaiming(false);
   };
 
 
@@ -786,66 +536,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       )}
 
 
-      {/* Challenge Modal */}
-      {activeModal === 'challenge' && (
-        <div className="modal-overlay" onClick={() => { setActiveModal(null); setPendingAction(null); }}>
-          <div className="modal-content max-w-md border-indigo-500/20 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-               <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                    <Shield size={20} />
-                  </div>
-                  <h2 className="text-xl font-black text-white uppercase tracking-tight">Identity Challenge</h2>
-               </div>
-               <button onClick={() => { setActiveModal(null); setPendingAction(null); }} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
-            </div>
-
-            <div className="p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 mb-8 text-center space-y-4 relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 blur-3xl rounded-full" />
-               <p className="text-sm text-white/60 leading-relaxed font-medium relative z-10">
-                 To authorize this cloud operation, please provide word <span className="text-indigo-400 font-black">#{ (challengeIndex || 0) + 1 }</span> from your 12-word Sovereign Seed Phrase.
-               </p>
-               <div className="text-[10px] font-black text-indigo-400/40 uppercase tracking-[0.3em]">MFA: Security Level Alpha</div>
-            </div>
-
-            <div className="space-y-6">
-               <div className="space-y-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase tracking-widest px-1">Challenge Input</label>
-                  <input 
-                    type="password"
-                    autoFocus
-                    className={`w-full bg-black/50 border ${challengeError ? 'border-red-500/50' : 'border-white/10'} rounded-2xl p-5 text-center text-2xl font-mono font-bold text-white placeholder-white/5 focus:border-indigo-500/50 outline-none transition-all tracking-[0.1em]`}
-                    placeholder="ENTER WORD..."
-                    value={challengeInput}
-                    onChange={(e) => {
-                      setChallengeInput(e.target.value);
-                      if (challengeError) setChallengeError(false);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyChallenge()}
-                  />
-                  {challengeError && (
-                    <p className="text-[10px] font-bold text-red-500 mt-2 text-center uppercase tracking-tighter animate-in shake duration-300">
-                      ❌ Verification Failed: Invalid Mnemonic Match
-                    </p>
-                  )}
-               </div>
-
-               <button 
-                 onClick={handleVerifyChallenge}
-                 className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm uppercase rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-500/10 active:scale-95"
-               >
-                 <Key size={18} /> Complete Identity Check
-               </button>
-
-               <div className="flex flex-col items-center gap-2 pt-2">
-                 <p className="text-[9px] text-white/20 uppercase font-black tracking-[0.3em] flex items-center gap-2">
-                   <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> E2EE Sovereign Protection
-                 </p>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Send Modal */}
       {activeModal === 'send' && (
@@ -1112,132 +802,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
-      {/* --- 🏦 Sovereign Deposit & Gateway Modal (Bridge In) --- */}
-      {activeModal === 'deposit' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content max-w-xl border-indigo-500/20" onClick={e => e.stopPropagation()}>
-             <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-2xl font-black text-white uppercase tracking-tight">Deposit Gateway</h2>
-                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">External Asset Inflow (Sovereign Bridge)</p>
-                </div>
-                <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X size={20} className="text-white/20" /></button>
-             </div>
 
-              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
-                  <div className="flex-1 py-3 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase text-center shadow-lg">
-                    NATIVE (Sovereign Input)
-                  </div>
-              </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div className="space-y-6">
-                   <div className="p-4 bg-white/5 rounded-3xl border border-white/5 flex flex-col items-center justify-center aspect-square">
-                      <div className="p-4 bg-white rounded-2xl mb-4">
-                        <QRCodeSVG value={getGatewayAddress(activeDepositAsset)} size={140} />
-                      </div>
-                      <p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Scan to Bridge In</p>
-                   </div>
-                </div>
-
-                <div className="space-y-6">
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Sovereign Receiver Address</label>
-                      <div className="bg-black/40 border border-white/10 rounded-2xl p-4 relative group">
-                         <p className="text-[11px] font-mono text-indigo-100 break-all pr-10">{getGatewayAddress(activeDepositAsset)}</p>
-                         <button onClick={() => {
-                            navigator.clipboard.writeText(getGatewayAddress(activeDepositAsset));
-                            addLog("Gateway Address Copied");
-                         }} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/20 hover:text-indigo-400 transition-all">
-                           <Copy size={16} />
-                         </button>
-                      </div>
-                   </div>
-
-                    <div className="p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 text-center">
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Protocol Active</p>
-                        <p className="text-[10px] text-white/30 leading-relaxed font-medium">
-                             Assets sent here are automatically bridged into your Sovereign Identity via the Aura Oracle Relayer.
-                        </p>
-                    </div>
-                </div>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- 🚀 Sovereign Egress Modal (Bridge Out) --- */}
-      {activeModal === 'withdraw' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2 className="text-2xl font-black text-white uppercase tracking-tight">Sovereign Egress</h2>
-                <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest mt-1">Cross-Chain Bridge Outflow</p>
-              </div>
-              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="p-4 bg-pink-500/5 border border-pink-500/20 rounded-2xl flex gap-4">
-                <AlertCircle className="text-pink-500 shrink-0" size={24} />
-                <p className="text-[11px] text-white/60 leading-relaxed">
-                  Bridge operations involve a <strong className="text-pink-400">Burn & Release</strong> protocol. AUR will be burned on the Sovereign Ledger and released as tokens on the target network via the Oracle Relayer.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Target EVM Address (MetaMask)</label>
-                <input 
-                  value={withdrawTargetInput} 
-                  onChange={e => setWithdrawTargetInput(e.target.value)} 
-                  type="text" 
-                  placeholder="0x..." 
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none font-mono text-sm focus:border-pink-500/50"
-                />
-              </div>
-
-              <SovereignInput 
-                label="Amount to Bridge Out"
-                value={withdrawAmountInput}
-                onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
-                asset="AUR"
-                maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
-                onSetMax={() => setWithdrawAmountInput(ethers.formatUnits(balanceAtom, 18))}
-              />
-
-              <div className="p-4 bg-white/5 rounded-2xl space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
-                  <span>Estimated L1 Gas Fee</span>
-                  <span className={isEstimatingGas ? 'animate-pulse' : ''}>{gasFeeEstimate} ETH</span>
-                </div>
-                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
-                   <span>Settlement Time</span>
-                   <span>~2-5 Minutes</span>
-                </div>
-              </div>
-
-              <button 
-                disabled={withdrawStep === 'processing' || !withdrawAmountInput || !withdrawTargetInput}
-                onClick={handleBridgeEgress} 
-                className={`w-full py-5 font-black text-sm uppercase rounded-2xl transition-all shadow-lg ${
-                  withdrawStep === 'processing' ? 'bg-white/10 text-white/20' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-pink-600/20'
-                }`}
-              >
-                {withdrawStep === 'processing' ? 'Confirming Burn Sig...' : 'Initiate Sovereign Egress'}
-              </button>
-
-              {withdrawStep === 'success' && (
-                <p className="text-center text-[10px] font-bold text-emerald-400 uppercase tracking-widest animate-pulse">
-                  ✅ Egress Authorized • Relay in Progress
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bridge System Deactivated */}
 
 
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -1301,113 +866,147 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
               </button>
             </div>
-          </div>
-        </header>
-
-        {/* Hero Pillars (Header Row) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {/* Sovereign Consensus */}
-          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
+             {/* Hero Pillars (Header Row) */}
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-8">
+          {/* Sovereign Consensus - 40% */}
+          <div className="lg:col-span-4 glass-panel p-6 rounded-3xl relative overflow-hidden group flex flex-col justify-between">
             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-3xl rounded-full" />
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                <Globe size={20} />
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                  <Globe size={20} />
+                </div>
+                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Sovereign Consensus</span>
               </div>
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Consensus</span>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-4xl font-bold tracking-tighter text-white">{networkStats.activeNodes}</p>
-              <p className="text-[10px] text-white/20 font-medium uppercase tracking-widest">Active Validators</p>
+              <div className="space-y-0.5">
+                <p className="text-6xl font-black tracking-tighter text-white">{networkStats.activeNodes}</p>
+                <p className="text-[10px] text-white/20 font-medium uppercase tracking-widest">Active Network Validators</p>
+              </div>
             </div>
           </div>
 
-          {/* Celestial Treasury */}
-          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-3xl rounded-full" />
-            <div className="flex items-center gap-3 mb-4">
+          {/* Celestial Treasury - 60% */}
+          <div className="lg:col-span-6 glass-panel p-8 rounded-3xl relative overflow-hidden group border border-indigo-500/10">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-                <Coins size={20} />
+                <Coins size={24} />
               </div>
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Treasury</span>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Celestial Treasury</span>
             </div>
-            <div className="space-y-0.5">
-              <p className="text-4xl font-bold tracking-tighter text-white">
-                {ethers.formatUnits(balanceAtom, 18).slice(0, 6)}<span className="text-sm opacity-20"> AUR</span>
-              </p>
-              <p className="text-[10px] text-purple-400/40 font-bold uppercase tracking-widest">Liquid Reserve</p>
+            
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+              <div className="space-y-1">
+                <p className="text-6xl font-black tracking-tighter text-white leading-none">
+                  {ethers.formatUnits(balanceAtom, 18).slice(0, 6)}<span className="text-xl opacity-20"> AUR</span>
+                </p>
+                <p className="text-[11px] text-purple-400/60 font-bold uppercase tracking-widest">Liquid Balance (Available to Spend)</p>
+              </div>
+              
+              <div className="flex gap-3 shrink-0">
+                <button onClick={() => setActiveModal('send')} className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[11px] font-black uppercase transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center gap-2">
+                   <ArrowUpRight size={14} /> Send
+                </button>
+                <button onClick={() => setActiveModal('receive')} className="px-10 py-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-2xl text-[11px] font-black uppercase transition-all border border-indigo-500/10 flex items-center gap-2">
+                   <ArrowDownLeft size={14} /> Receive
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setActiveModal('send')} className="flex-1 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase transition-all">Send</button>
-              <button onClick={() => setActiveModal('receive')} className="flex-1 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase transition-all">Receive</button>
-              <button onClick={() => setActiveModal('withdraw')} className="flex-1 py-2 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 rounded-xl text-[9px] font-black uppercase transition-all">Bridge</button>
+            
+            <div className="mt-8 pt-6 border-t border-white/5">
+                <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] font-mono italic">
+                   Protocol Charge: 1% Fee Per Outgoing Transfer
+                </p>
             </div>
           </div>
+        </div>
 
-          {/* Sovereign Stake */}
-          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
+        {/* Secondary Operations Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-10 gap-6 mb-12">
+           {/* Sovereign Stake */}
+           <div className="lg:col-span-2 glass-panel p-6 rounded-3xl relative overflow-hidden group border border-emerald-500/10">
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400">
                 <Lock size={20} />
               </div>
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Staking</span>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Sovereign Stake</span>
             </div>
             <div className="space-y-0.5 mb-6">
-              <p className="text-4xl font-bold tracking-tighter text-emerald-100">
-                {ethers.formatUnits(stakedBalanceAtom, 18).slice(0, 6)}<span className="text-sm opacity-20"> AUR</span>
+              <p className="text-3xl font-bold tracking-tighter text-emerald-100 leading-none">
+                {ethers.formatUnits(stakedBalanceAtom, 18).slice(0, 4)}<span className="text-xs opacity-20"> AUR</span>
               </p>
-              <div className="text-[9px] font-black text-emerald-400/40 flex items-center gap-1.5 uppercase tracking-widest">
-                <RefreshCw size={8} className="animate-spin-slow" /> Compounding
+              <div className="text-[9px] font-black text-emerald-400/40 flex items-center gap-1.5 uppercase tracking-widest mt-1">
+                 Compounding Active
               </div>
             </div>
-            <button onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl font-black text-[9px] uppercase border border-emerald-500/10 transition-all">Manage</button>
+            <button onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} className="w-full py-3 bg-[#111] hover:bg-[#1a1a1a] text-emerald-400 rounded-xl font-black text-[9px] uppercase border border-white/5 transition-all">Manage Vault</button>
           </div>
 
           {/* Reward Accrual */}
-          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group border border-amber-500/20">
+          <div className="lg:col-span-2 glass-panel p-6 rounded-3xl relative overflow-hidden group border border-amber-500/20">
             <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-3xl rounded-full" />
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
                 <Zap size={20} className="animate-pulse" />
               </div>
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Yield</span>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Reward Accrual</span>
+              <span className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-black font-black rounded uppercase">AUR Protocol</span>
             </div>
-            <div className="space-y-0.5 mb-2">
-              <p className="text-4xl font-bold tracking-tighter text-amber-500">
-                {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}
+            <div className="space-y-0.5 mb-4">
+              <p className="text-3xl font-bold tracking-tighter text-amber-500 leading-none">
+                {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}<span className="text-xs opacity-40"> AUR</span>
               </p>
-              <p className="text-[10px] text-amber-500/40 font-bold uppercase tracking-widest">Live Rewards</p>
+              <p className="text-[9px] text-white/20 font-bold uppercase tracking-widest mt-1">Live cloud mining from presence</p>
             </div>
             <button 
               disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
               onClick={handleClaim}
-              className="w-full mt-4 py-3 bg-amber-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-amber-400 transition-all disabled:opacity-20"
+              className="w-full py-3 bg-amber-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-amber-400 transition-all disabled:opacity-20"
             >
-              {isClaiming ? <RefreshCw size={12} className="animate-spin mx-auto" /> : 'Claim Rewards'}
+              Claim Sovereign Rewards
             </button>
+          </div>
+
+          {/* Peer Telemetry Stream - Moved here for Balance (60% width) */}
+          <div className="lg:col-span-6 glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
+            <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <TerminalIcon size={16} className="text-indigo-400" />
+                <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
+              </div>
+              <div className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2E SECURE
+              </div>
+            </div>
+            <div className="p-6 h-[180px] font-mono text-[9px] overflow-y-auto space-y-2 scrollbar-thin grow">
+              {logs.map((log, i) => (
+                <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/20'}`}>
+                   <span className="opacity-10 select-none">❯</span> {log}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Dynamic Monitoring Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
+        {/* Global Activity Grid */}
+        <div className="grid grid-cols-1 gap-8">
           {/* Sovereign Activity */}
-          <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
+          <div className="glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
             <div className="bg-white/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-3">
                 <Activity size={16} className="text-emerald-400" />
                 <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Activity</span>
               </div>
-              <div className="text-[10px] font-black text-white/20 uppercase">Protocol History</div>
+              <div className="text-[10px] font-black text-white/20 uppercase tracking-widest">Last 15 Records</div>
             </div>
-            <div className="max-h-[360px] overflow-y-auto divide-y divide-white/5 scrollbar-thin">
+            <div className="max-h-[480px] overflow-y-auto divide-y divide-white/5 scrollbar-thin grow">
+de-white/5 scrollbar-thin grow">
               {history.map((tx, i) => {
                 const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase() && tx.tx_type === 'transfer';
                 const isStake = tx.tx_type === 'stake';
                 const isUnstake = tx.tx_type === 'unstake';
                 const isReward = tx.tx_type === 'reward' || tx.tx_type === 'presence';
-                const isBridgeIn = tx.tx_type === 'bridge_in';
-                const isBridgeOut = tx.tx_type === 'bridge_out';
                 
                 return (
                   <div key={tx.id || i} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
@@ -1416,15 +1015,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                         isReward ? 'bg-amber-500/10 text-amber-400' :
                         isStake ? 'bg-emerald-500/10 text-emerald-400' :
                         isUnstake ? 'bg-orange-500/10 text-orange-400' :
-                        isBridgeIn ? 'bg-green-500/10 text-green-400' :
-                        isBridgeOut ? 'bg-pink-600/10 text-pink-500' :
                         isOut ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'
                       }`}>
                         {isReward ? <Zap size={14} /> :
                          isStake ? <Lock size={14} /> :
                          isUnstake ? <RefreshCw size={14} /> :
-                         isBridgeIn ? <ArrowDownLeft size={14} /> :
-                         isBridgeOut ? <ArrowUpRight size={14} /> :
                          isOut ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
                       </div>
                       <div>
@@ -1432,18 +1027,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                           {isReward ? 'Protocol Yield' :
                            isStake ? 'Vault Allocation' :
                            isUnstake ? 'Vault Release' :
-                           isBridgeIn ? 'Bridge Inflow' :
-                           isBridgeOut ? 'Sovereign Egress' :
                            isOut ? `Sent: ${tx.to_address?.slice(0,6)}...` : `Recv: ${tx.from_address?.slice(0,6)}...`}
                         </p>
                         <div className="text-[9px] text-white/20">{new Date(tx.created_at).toLocaleString()}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`text-xs font-mono font-black ${isOut || isStake || isBridgeOut ? 'text-white/40' : 'text-emerald-400'}`}>
-                        {isOut || isStake || isBridgeOut ? '-' : '+'}{(() => {
+                      <p className={`text-xs font-mono font-black ${isOut || isStake ? 'text-white/40' : 'text-emerald-400'}`}>
+                        {isOut || isStake ? '-' : '+'}{(() => {
                           try { 
-                              if (isBridgeIn || isBridgeOut) return Number(tx.amount).toFixed(2);
                               return Number(ethers.formatUnits(tx.amount?.toString() || "0", 18)).toFixed(2); 
                           }
                           catch { return "0.00"; }
@@ -1460,20 +1052,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           </div>
 
           {/* Console */}
-          <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
+          <div className="glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
             <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-3">
                 <TerminalIcon size={16} className="text-indigo-400" />
                 <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
               </div>
               <div className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
-                <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2E SECURE
+                <div className="w-1 h-1 rounded-full bg-indigo-500" /> SECURE
               </div>
             </div>
-            <div className="p-6 h-[360px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin">
+            <div className="p-6 h-[360px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin grow">
               {logs.map((log, i) => (
                 <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/30'}`}>
-                  {log}
+                   <span className="opacity-20 select-none">❯</span> {log}
                 </div>
               ))}
             </div>
