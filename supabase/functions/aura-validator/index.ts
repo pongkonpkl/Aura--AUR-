@@ -21,13 +21,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // 1. Reconstruct the message based on the operation (Synchronized with Dashboard.tsx)
+    const prefix = "[Aura Sovereign v1] "
     let message = ""
     if (op === 'transfer') {
-      message = `AUR_TX:${tx.nonce}:${from_address}:${tx.to_address.toLowerCase()}:${tx.amount_atom}`
+      message = `${prefix}AUR_TX:${tx.nonce}:${from_address}:${tx.to_address.toLowerCase()}:${tx.amount_atom}`
     } else if (op === 'stake') {
-      message = `AUR_STAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
+      message = `${prefix}AUR_STAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
     } else if (op === 'unstake') {
-      message = `AUR_UNSTAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
+      message = `${prefix}AUR_UNSTAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
     } else {
       await updateStatus(supabase, tx_hash_id, 'failed', `ERR_004: Invalid Op: ${op}`)
       return new Response("Invalid Operation", { status: 400 })

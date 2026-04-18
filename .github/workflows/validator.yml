@@ -34,10 +34,3 @@ jobs:
           PROCESS_QUEUE: "true"
         run: python cloud_validator.py
 
-      - name: Commit and Push
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "Aura Cloud Validator"
-          git add ledger.json
-          git commit -m "feat: Cloud Validator processed transaction" || echo "No changes"
-          git push

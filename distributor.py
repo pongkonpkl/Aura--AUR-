@@ -39,9 +39,9 @@ def run_distribution():
 def sync_ledger():
     print(f"[{datetime.now()}] Synchronizing local ledger with cloud state...")
     try:
-        # Fetch all profiles
+        # Fetch all profiles with Atom precision
         resp = requests.get(
-            f"{SUPABASE_URL}/rest/v1/profiles?select=wallet_address,balance,staked_balance,last_nonce",
+            f"{SUPABASE_URL}/rest/v1/profiles?select=address,balance_atom,staked_balance_atom,last_nonce",
             headers=get_headers()
         )
         if resp.status_code != 200:
@@ -63,24 +63,24 @@ def sync_ledger():
         total_staked = Decimal(0)
 
         for p in profiles:
-            addr = p['wallet_address'].lower()
-            # Professional: Use Decimal for string-based high-precision math
-            bal_dec = Decimal(str(p['balance']))
-            staked_dec = Decimal(str(p['staked_balance']))
-            nonce = str(p['last_nonce'] or "0")
+            addr = p['address'].lower()
+            # Professional: Ledger backup stores as string-based atoms
+            bal_atom = str(p.get('balance_atom') or "0")
+            staked_atom = str(p.get('staked_balance_atom') or "0")
+            nonce = str(p.get('last_nonce') or "0")
             
-            new_balances[addr] = str(bal_dec)
-            new_staked[addr] = str(staked_dec)
+            new_balances[addr] = bal_atom
+            new_staked[addr] = staked_atom
             new_nonces[addr] = nonce
             
-            total_supply += bal_dec + staked_dec
-            total_staked += staked_dec
+            total_supply += Decimal(bal_atom) + Decimal(staked_atom)
+            total_staked += Decimal(staked_atom)
 
-        ledger['balances'] = new_balances
-        ledger['staked_balances'] = new_staked
+        ledger['balances_atom'] = new_balances
+        ledger['staked_balances_atom'] = new_staked
         ledger['nonces'] = new_nonces
-        ledger['total_supply'] = str(total_supply)
-        ledger['total_staked'] = str(total_staked)
+        ledger['total_supply_atom'] = str(total_supply)
+        ledger['total_staked_atom'] = str(total_staked)
         ledger['last_sync'] = datetime.now().isoformat()
 
         # Save back to ledger.json
@@ -145,5 +145,8 @@ if __name__ == "__main__":
 
     # 2. Update Global Monitor Metrics
     update_global_stats()
+
+    # 3. Synchronize Historical Backup (ledger.json)
+    sync_ledger()
 
     print("Sovereign Distribution Pulse completed successfully.")

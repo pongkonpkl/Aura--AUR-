@@ -29,6 +29,14 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
         run: python distributor.py
 
+      - name: Commit Historical Backup
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Aura Backup Bot"
+          git add ledger.json
+          git commit -m "chore: Daily Sovereign Ledger Snapshot [Automated]" || echo "No changes"
+          git push
+
       - name: Commit and Push
         run: |
           git config --local user.email "action@github.com"

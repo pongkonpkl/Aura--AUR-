@@ -7,20 +7,7 @@ import requests
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-# We still keep ledger.json as a Public Ledger (Historical History)
-LEDGER_FILE = "ledger.json"
-
-def load_json(filepath):
-    if not os.path.exists(filepath):
-        return {}
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_json(filepath, data):
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
-
-# Global Configuration (Robust fetching)
+# Configuration fetching
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL") or "").strip()
 SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SERVICE_ROLE_KEY") or "").strip()
 

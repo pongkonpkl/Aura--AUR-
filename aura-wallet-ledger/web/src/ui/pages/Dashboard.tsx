@@ -75,6 +75,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [optimisticReward, setOptimisticReward] = useState<bigint>(0n);
   const [isClaiming, setIsClaiming] = useState(false);
 
+  const LOCAL_ENGINE_URL = "http://localhost:8000";
+  const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
+
+  const isValidAddress = recipient.startsWith('0x') && recipient.length === 42;
+  const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
+
 
   const [logs, setLogs] = useState<string[]>([
     'Quantum presence verified...',
@@ -194,14 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           
           setBalanceAtom(safeBalance.toString());
           setStakedBalanceAtom(safeStaked.toString());
-
-          // Sync Multi-Vault Assets
-          setNativeBalance(serverProfile.native_balance != null ? Number(serverProfile.native_balance).toFixed(2) : "0.00");
-          setBtcBalance(serverProfile.btc_balance != null ? Number(serverProfile.btc_balance).toFixed(3) : "0.000");
-          setEthBalance(serverProfile.eth_balance != null ? Number(serverProfile.eth_balance).toFixed(6) : "0.000000");
           
-          setBalanceAtom(displayBalance.toString());
-          setStakedBalanceAtom(displayStaked.toString());
           setIsEngineReady(true);
         }
 
