@@ -109,7 +109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   // --- 🛰️ Legacy Bridge Deactivated ---
 
-  const handleSimulateWithdraw = async () => {
+  const handleBridgeEgress = async () => {
     if (!withdrawAmountInput || !withdrawTargetInput) return;
     
     const action = async () => {
@@ -145,7 +145,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         // Update local state optimistically
         setBalanceAtom((prev) => (BigInt(prev) - amountAtom).toString());
         setWithdrawAmountInput("");
-        setWithdrawStep('success'); // Show success green state
         
         setTimeout(() => {
           setWithdrawStep('idle');
@@ -1113,7 +1112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
-      {/* --- 🏦 Sovereign Deposit & Gateway Modal --- */}
+      {/* --- 🏦 Sovereign Deposit & Gateway Modal (Bridge In) --- */}
       {activeModal === 'deposit' && (
         <div className="modal-overlay" onClick={() => setActiveModal(null)}>
           <div className="modal-content max-w-xl border-indigo-500/20" onClick={e => e.stopPropagation()}>
@@ -1137,7 +1136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                       <div className="p-4 bg-white rounded-2xl mb-4">
                         <QRCodeSVG value={getGatewayAddress(activeDepositAsset)} size={140} />
                       </div>
-                      <p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Scan to Bridge</p>
+                      <p className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">Scan to Bridge In</p>
                    </div>
                 </div>
 
@@ -1148,7 +1147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                          <p className="text-[11px] font-mono text-indigo-100 break-all pr-10">{getGatewayAddress(activeDepositAsset)}</p>
                          <button onClick={() => {
                             navigator.clipboard.writeText(getGatewayAddress(activeDepositAsset));
-                            toast.success("Gateway Address Copied");
+                            addLog("Gateway Address Copied");
                          }} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-white/20 hover:text-indigo-400 transition-all">
                            <Copy size={16} />
                          </button>
@@ -1156,13 +1155,84 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                    </div>
 
                     <div className="p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 text-center">
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Sovereign Protocol Active</p>
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Protocol Active</p>
                         <p className="text-[10px] text-white/30 leading-relaxed font-medium">
-                             This QR code represents your Sovereign Identity on the Aura Distributed Ledger. It is the primary cryptographic endpoint for vault synchronization and network presence within your autonomous infrastructure.
+                             Assets sent here are automatically bridged into your Sovereign Identity via the Aura Oracle Relayer.
                         </p>
                     </div>
                 </div>
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- 🚀 Sovereign Egress Modal (Bridge Out) --- */}
+      {activeModal === 'withdraw' && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tight">Sovereign Egress</h2>
+                <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest mt-1">Cross-Chain Bridge Outflow</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="p-4 bg-pink-500/5 border border-pink-500/20 rounded-2xl flex gap-4">
+                <AlertCircle className="text-pink-500 shrink-0" size={24} />
+                <p className="text-[11px] text-white/60 leading-relaxed">
+                  Bridge operations involve a <strong className="text-pink-400">Burn & Release</strong> protocol. AUR will be burned on the Sovereign Ledger and released as tokens on the target network via the Oracle Relayer.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Target EVM Address (MetaMask)</label>
+                <input 
+                  value={withdrawTargetInput} 
+                  onChange={e => setWithdrawTargetInput(e.target.value)} 
+                  type="text" 
+                  placeholder="0x..." 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 outline-none font-mono text-sm focus:border-pink-500/50"
+                />
+              </div>
+
+              <SovereignInput 
+                label="Amount to Bridge Out"
+                value={withdrawAmountInput}
+                onChange={(e: any) => setWithdrawAmountInput(e.target.value)}
+                asset="AUR"
+                maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
+                onSetMax={() => setWithdrawAmountInput(ethers.formatUnits(balanceAtom, 18))}
+              />
+
+              <div className="p-4 bg-white/5 rounded-2xl space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
+                  <span>Estimated L1 Gas Fee</span>
+                  <span className={isEstimatingGas ? 'animate-pulse' : ''}>{gasFeeEstimate} ETH</span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
+                   <span>Settlement Time</span>
+                   <span>~2-5 Minutes</span>
+                </div>
+              </div>
+
+              <button 
+                disabled={withdrawStep === 'processing' || !withdrawAmountInput || !withdrawTargetInput}
+                onClick={handleBridgeEgress} 
+                className={`w-full py-5 font-black text-sm uppercase rounded-2xl transition-all shadow-lg ${
+                  withdrawStep === 'processing' ? 'bg-white/10 text-white/20' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-pink-600/20'
+                }`}
+              >
+                {withdrawStep === 'processing' ? 'Confirming Burn Sig...' : 'Initiate Sovereign Egress'}
+              </button>
+
+              {withdrawStep === 'success' && (
+                <p className="text-center text-[10px] font-bold text-emerald-400 uppercase tracking-widest animate-pulse">
+                  ✅ Egress Authorized • Relay in Progress
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1212,267 +1282,204 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
 
             
-            <button 
-              onClick={onLogout}
-              className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10"
-            >
-              <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
-            </button>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => {
+                  if (window.confirm("CAUTION: Disconnecting will WIPE your identity from this device. Continue?")) {
+                    onDisconnect();
+                  }
+                }}
+                className="px-4 py-2 bg-red-500/10 text-red-100 hover:bg-red-500/20 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10 uppercase tracking-widest"
+              >
+                Disconnect Node
+              </button>
+              
+              <button 
+                onClick={onLogout}
+                className="px-4 py-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-white/10 uppercase tracking-widest"
+              >
+                <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* Main Dashboard Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
-          <div className="lg:col-span-3 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Global Presence */}
-              <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-3xl rounded-full" />
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400">
-                    <Globe size={24} />
-                  </div>
-                  <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Consensus</span>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-blue-400 transition-colors">
-                    {networkStats.activeNodes}
-                  </p>
-                  <p className="text-sm text-white/30 font-medium whitespace-nowrap">Active Network Validators</p>
-                </div>
+        {/* Hero Pillars (Header Row) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {/* Sovereign Consensus */}
+          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                <Globe size={20} />
               </div>
-
-              {/* Celestial Treasury (Liquid) */}
-              <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-3xl rounded-full" />
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400">
-                    <Coins size={24} />
-                  </div>
-                  <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Celestial Treasury</span>
-                </div>
-                <div className="flex justify-between items-end mb-8 space-y-1">
-                  <div>
-                    <p className="text-5xl font-bold tracking-tighter text-white group-hover:text-purple-400 transition-colors">
-                      {ethers.formatUnits(balanceAtom, 18)}<span className="text-2xl text-white/40"> AUR</span>
-                    </p>
-                    <p className="text-sm text-purple-400/60 font-medium">Liquid Balance (Available to Spend)</p>
-                  </div>
-                </div>
-                {/* Legacy wealth has been migrated to Supabase-first settlement. No restore required. */}
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => setActiveModal('send')}
-                    className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
-                  >
-                    <ArrowUpRight size={18} /> Send
-                  </button>
-                  <button 
-                    onClick={() => setActiveModal('receive')}
-                    className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
-                  >
-                    <ArrowDownLeft size={18} /> Receive
-                  </button>
-                </div>
-                <div className="mt-4 text-center">
-                    <p className="text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] italic">
-                      Protocol Charge: 1% Fee Per Outgoing Transfer
-                    </p>
-                </div>
-              </div>
-
-               {/* Sovereign Staking (PoS) */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-emerald-500/10">
-                   <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
-                   <div className="flex items-center justify-between mb-6">
-                     <div className="flex items-center gap-4">
-                       <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                         <Lock size={24} />
-                       </div>
-                       <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Sovereign Stake</span>
-                     </div>
-                   </div>
-                   <div className="space-y-1 mb-8">
-                     <p className="text-4xl font-bold tracking-tighter text-emerald-100 group-hover:text-emerald-400 transition-colors">
-                       {ethers.formatUnits(stakedBalanceAtom, 18)}<span className="text-xl text-emerald-400/40"> AUR</span>
-                     </p>
-                     <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-2">
-                       <RefreshCw size={10} className="animate-spin-slow" /> Compounding Active
-                     </p>
-                   </div>
-                   <button 
-                     onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} 
-                     className="w-full py-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 rounded-xl font-bold border border-emerald-500/20 transition-all text-xs"
-                   >
-                     Manage Vault
-                   </button>
-                 </div>
-
-                 {/* LIVE REWARD COUNTER (The Antidote to Boredom) */}
-                 <div className="glass-panel p-8 rounded-3xl relative overflow-hidden group border border-amber-500/20 shadow-[0_0_30px_rgba(245,158,11,0.05)]">
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-3xl rounded-full" />
-                   <div className="flex items-center justify-between mb-6">
-                     <div className="flex items-center gap-4">
-                       <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                         <Zap size={24} className="animate-pulse" />
-                       </div>
-                       <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Reward Accrual</span>
-                     </div>
-                     <div className="flex flex-col items-center justify-center px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 text-[9px] font-black italic leading-[1.1]">
-                         <span>AUR</span>
-                         <span>PROTOCOL</span>
-                      </div>
-                   </div>
-                   <div className="space-y-1 mb-8">
-                     <p className="text-4xl font-bold tracking-tighter text-amber-500 group-hover:scale-105 transition-transform origin-left">
-                       {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}
-                       <span className="text-xl opacity-30"> AUR</span>
-                     </p>
-                     <p className="text-[10px] text-amber-500/60 font-medium tracking-tight">
-                       Real-time cloud mining from active presence.
-                     </p>
-                   </div>
-                   <button 
-                     disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
-                     onClick={handleClaim}
-                     className={`w-full py-4 bg-amber-500 text-black font-black text-xs uppercase rounded-xl shadow-lg shadow-amber-500/20 hover:bg-amber-400 hover:scale-[1.02] active:scale-95 transition-all relative flex items-center justify-center ${
-                       isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n ? 'opacity-20 grayscale pointer-events-none' : ''
-                     }`}
-                   >
-                     <div className="absolute left-6">
-                        {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <PlusCircle size={14} />}
-                     </div>
-                     Claim Sovereign Rewards
-                   </button>
-                 </div>
-               </div>
-
-
-
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Consensus</span>
             </div>
-
-            {/* Sovereign Activity */}
-            <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
-              <div className="bg-white/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <Activity size={16} className="text-emerald-400" />
-                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Activity</span>
-                </div>
-                <div className="text-[10px] font-black text-white/20 uppercase">Last 15 Records</div>
-              </div>
-              <div className="max-h-[320px] overflow-y-auto divide-y divide-white/5 scrollbar-thin">
-                {history.map((tx, i) => {
-                  const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase() && tx.tx_type === 'transfer';
-                  const isStake = tx.tx_type === 'stake';
-                  const isUnstake = tx.tx_type === 'unstake';
-                  const isReward = tx.tx_type === 'reward' || tx.tx_type === 'presence';
-                  const isBridgeIn = tx.tx_type === 'bridge_in';
-                  const isBridgeOut = tx.tx_type === 'bridge_out';
-                  
-                  return (
-                    <div key={tx.id || i} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-lg ${
-                          isReward ? 'bg-amber-500/10 text-amber-400' :
-                          isStake ? 'bg-emerald-500/10 text-emerald-400' :
-                          isUnstake ? 'bg-orange-500/10 text-orange-400' :
-                          isBridgeIn ? 'bg-green-500/10 text-green-400' :
-                          isBridgeOut ? 'bg-pink-600/10 text-pink-500' :
-                          isOut ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'
-                        }`}>
-                          {isReward ? <Zap size={14} /> :
-                           isStake ? <Lock size={14} /> :
-                           isUnstake ? <RefreshCw size={14} /> :
-                           isBridgeIn ? <ArrowDownLeft size={14} /> :
-                           isBridgeOut ? <ArrowUpRight size={14} /> :
-                           isOut ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors">
-                            {isReward ? 'Network Protocol Yield' :
-                             isStake ? 'Vault Allocation (Stake)' :
-                             isUnstake ? 'Vault Release (Unstake)' :
-                             isBridgeIn ? 'Cross-Chain Inflow (Bridge In)' :
-                             isBridgeOut ? 'Sovereign Egress (Bridge Out)' :
-                             isOut ? `Sent: ${tx.to_address?.slice(0,6)}...` : `Recv: ${tx.from_address?.slice(0,6)}...`}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-white/20">{new Date(tx.created_at).toLocaleString()}</span>
-                            <span className={`text-[9px] font-black uppercase tracking-tighter ${
-                              tx.status === 'success' ? 'text-emerald-500/60' :
-                              tx.status === 'failed' ? 'text-red-500/60' : 'text-indigo-400/60 animate-pulse'
-                            }`}>
-                              {tx.status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-xs font-mono font-black ${isOut || isStake || isBridgeOut ? 'text-white/40' : 'text-emerald-400'}`}>
-                          {isOut || isStake || isBridgeOut ? '-' : '+'}{(() => {
-                            try { 
-                                // Bridges don't use 1e18 atom scaling because they aren't AUR
-                                if (isBridgeIn || isBridgeOut) return Number(tx.amount).toFixed(4);
-                                return Number(ethers.formatUnits(tx.amount?.toString() || "0", 18)).toFixed(4); 
-                            }
-                            catch { return "0.0000"; }
-                          })()}
-                        </p>
-                        <p className="text-[8px] text-white/10 font-mono tracking-tighter uppercase">#{String(tx.tx_hash || 'unknown').slice(-8)}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {history.length === 0 && (
-                  <div className="p-12 text-center">
-                    <p className="text-[10px] font-bold text-white/10 uppercase tracking-widest italic">No record found in ledger</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-
-
-            {/* Console */}
-            <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
-              <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <TerminalIcon size={16} className="text-indigo-400" />
-                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
-                </div>
-                <div className="flex gap-4">
-                  <span className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
-                    <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2EE Secure
-                  </span>
-                </div>
-              </div>
-              <div className="p-6 h-[200px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin">
-                {logs.map((log, i) => (
-                  <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300' : 'text-white/30'}`}>
-                    {log}
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-0.5">
+              <p className="text-4xl font-bold tracking-tighter text-white">{networkStats.activeNodes}</p>
+              <p className="text-[10px] text-white/20 font-medium uppercase tracking-widest">Active Validators</p>
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-8">
+          {/* Celestial Treasury */}
+          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+                <Coins size={20} />
+              </div>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Treasury</span>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-4xl font-bold tracking-tighter text-white">
+                {ethers.formatUnits(balanceAtom, 18).slice(0, 6)}<span className="text-sm opacity-20"> AUR</span>
+              </p>
+              <p className="text-[10px] text-purple-400/40 font-bold uppercase tracking-widest">Liquid Reserve</p>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setActiveModal('send')} className="flex-1 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase transition-all">Send</button>
+              <button onClick={() => setActiveModal('receive')} className="flex-1 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase transition-all">Receive</button>
+              <button onClick={() => setActiveModal('withdraw')} className="flex-1 py-2 bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 rounded-xl text-[9px] font-black uppercase transition-all">Bridge</button>
+            </div>
+          </div>
+
+          {/* Sovereign Stake */}
+          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400">
+                <Lock size={20} />
+              </div>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Staking</span>
+            </div>
+            <div className="space-y-0.5 mb-6">
+              <p className="text-4xl font-bold tracking-tighter text-emerald-100">
+                {ethers.formatUnits(stakedBalanceAtom, 18).slice(0, 6)}<span className="text-sm opacity-20"> AUR</span>
+              </p>
+              <div className="text-[9px] font-black text-emerald-400/40 flex items-center gap-1.5 uppercase tracking-widest">
+                <RefreshCw size={8} className="animate-spin-slow" /> Compounding
+              </div>
+            </div>
+            <button onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl font-black text-[9px] uppercase border border-emerald-500/10 transition-all">Manage</button>
+          </div>
+
+          {/* Reward Accrual */}
+          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden group border border-amber-500/20">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-3xl rounded-full" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                <Zap size={20} className="animate-pulse" />
+              </div>
+              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Yield</span>
+            </div>
+            <div className="space-y-0.5 mb-2">
+              <p className="text-4xl font-bold tracking-tighter text-amber-500">
+                {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}
+              </p>
+              <p className="text-[10px] text-amber-500/40 font-bold uppercase tracking-widest">Live Rewards</p>
+            </div>
             <button 
-              onClick={() => {
-                if (window.confirm("CAUTION: Disconnecting will WIPE your identity from this device. You will need your 12-word Seed Phrase to return. Continue?")) {
-                  onDisconnect();
-                }
-              }}
-              className="w-full py-4 text-xs font-bold text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-all uppercase tracking-widest border border-red-500/10 rounded-2xl shadow-lg"
+              disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
+              onClick={handleClaim}
+              className="w-full mt-4 py-3 bg-amber-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-amber-400 transition-all disabled:opacity-20"
             >
-              Disconnect Node
+              {isClaiming ? <RefreshCw size={12} className="animate-spin mx-auto" /> : 'Claim Rewards'}
             </button>
           </div>
+        </div>
 
+        {/* Dynamic Monitoring Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Sovereign Activity */}
+          <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
+            <div className="bg-white/10 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <Activity size={16} className="text-emerald-400" />
+                <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Sovereign Activity</span>
+              </div>
+              <div className="text-[10px] font-black text-white/20 uppercase">Protocol History</div>
+            </div>
+            <div className="max-h-[360px] overflow-y-auto divide-y divide-white/5 scrollbar-thin">
+              {history.map((tx, i) => {
+                const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase() && tx.tx_type === 'transfer';
+                const isStake = tx.tx_type === 'stake';
+                const isUnstake = tx.tx_type === 'unstake';
+                const isReward = tx.tx_type === 'reward' || tx.tx_type === 'presence';
+                const isBridgeIn = tx.tx_type === 'bridge_in';
+                const isBridgeOut = tx.tx_type === 'bridge_out';
+                
+                return (
+                  <div key={tx.id || i} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${
+                        isReward ? 'bg-amber-500/10 text-amber-400' :
+                        isStake ? 'bg-emerald-500/10 text-emerald-400' :
+                        isUnstake ? 'bg-orange-500/10 text-orange-400' :
+                        isBridgeIn ? 'bg-green-500/10 text-green-400' :
+                        isBridgeOut ? 'bg-pink-600/10 text-pink-500' :
+                        isOut ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'
+                      }`}>
+                        {isReward ? <Zap size={14} /> :
+                         isStake ? <Lock size={14} /> :
+                         isUnstake ? <RefreshCw size={14} /> :
+                         isBridgeIn ? <ArrowDownLeft size={14} /> :
+                         isBridgeOut ? <ArrowUpRight size={14} /> :
+                         isOut ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-white/80">
+                          {isReward ? 'Protocol Yield' :
+                           isStake ? 'Vault Allocation' :
+                           isUnstake ? 'Vault Release' :
+                           isBridgeIn ? 'Bridge Inflow' :
+                           isBridgeOut ? 'Sovereign Egress' :
+                           isOut ? `Sent: ${tx.to_address?.slice(0,6)}...` : `Recv: ${tx.from_address?.slice(0,6)}...`}
+                        </p>
+                        <div className="text-[9px] text-white/20">{new Date(tx.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-xs font-mono font-black ${isOut || isStake || isBridgeOut ? 'text-white/40' : 'text-emerald-400'}`}>
+                        {isOut || isStake || isBridgeOut ? '-' : '+'}{(() => {
+                          try { 
+                              if (isBridgeIn || isBridgeOut) return Number(tx.amount).toFixed(2);
+                              return Number(ethers.formatUnits(tx.amount?.toString() || "0", 18)).toFixed(2); 
+                          }
+                          catch { return "0.00"; }
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              {history.length === 0 && (
+                <div className="p-12 text-center text-[10px] text-white/10 uppercase font-black italic">No records found</div>
+              )}
+            </div>
+          </div>
+
+          {/* Console */}
+          <div className="glass-panel rounded-3xl overflow-hidden border-white/5">
+            <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <TerminalIcon size={16} className="text-indigo-400" />
+                <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
+              </div>
+              <div className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2E SECURE
+              </div>
+            </div>
+            <div className="p-6 h-[360px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin">
+              {logs.map((log, i) => (
+                <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/30'}`}>
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+          </div>
         </div>
 
         <footer className="pt-12 text-center pb-20">
