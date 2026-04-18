@@ -806,6 +806,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
               </button>
             </div>
+          </div>
+        </header>
+
         {/* Hero Pillars (Header Row) */}
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-8">
           {/* Celestial Treasury - 100% Core Focus */}
