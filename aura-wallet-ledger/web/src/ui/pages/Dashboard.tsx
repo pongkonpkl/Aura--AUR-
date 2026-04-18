@@ -1809,14 +1809,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   </div>
                 )}
 
-                <div className="mt-12 p-6 bg-indigo-500/5 rounded-[2rem] border border-indigo-500/10 flex items-center gap-6">
-                   <div className="p-3 bg-indigo-500/10 rounded-2xl">
-                      <Shield size={20} className="text-indigo-400" />
-                   </div>
-                   <p className="text-[10px] text-white/40 leading-relaxed italic font-medium">
-                     <span className="text-indigo-400 font-black not-italic">SOVEREIGN PROTOCOL:</span> 1% of AUR is automatically incinerated from the initiator to ensure constant deflationary pressure. Transaction settlement is guaranteed by the Fahsai Sovereign Engine's multi-node quorum.
-                   </p>
-                </div>
               </div>
             </div>
 
