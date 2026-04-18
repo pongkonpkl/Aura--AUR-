@@ -90,8 +90,9 @@ def process_transaction(payload_src):
         except Exception as e:
             print(f"[ERROR] Invalid payload JSON: {e}")
             return False
-    else:
-        data = payload_src
+    if not data or not isinstance(data, dict):
+        print(f"[ERROR] Malformed transaction record: {payload_src}")
+        return False
 
     tx_hash_id = data.get("tx_hash") # From DB (Supabase Row)
     print(f"[INFO] Processing TX: {tx_hash_id}")
@@ -102,17 +103,22 @@ def process_transaction(payload_src):
     
     # Logic for Supabase Queue: If top-level keys are missing, extract from 'payload' JSONB
     if not op and "payload" in data:
-        db_payload = data["payload"]
+        db_payload = data.get("payload") or {}
         if isinstance(db_payload, str):
-            db_payload = json.loads(db_payload)
-        op = db_payload.get("op")
-        tx = db_payload.get("tx")
-        signature = db_payload.get("signature")
+            try:
+                db_payload = json.loads(db_payload)
+            except:
+                db_payload = {}
+        
+        if isinstance(db_payload, dict):
+            op = db_payload.get("op")
+            tx = db_payload.get("tx")
+            signature = db_payload.get("signature")
 
     # If it's a direct record from the 'transactions' table (like our high-speed queue)
     if data.get("tx_type") and not op:
         op = data.get("tx_type")
-        tx = {"address": data.get("from_address"), "amount_atom": data.get("amount"), "nonce": 0} # Nonce might be handled differently
+        tx = {"address": data.get("from_address"), "amount_atom": data.get("amount"), "nonce": 0} 
         # For High-Speed RPC, we might need to handle the nonce differently if it's not in the record
     
     if not op or not tx or not signature:
@@ -121,7 +127,10 @@ def process_transaction(payload_src):
         return False
         
     try:
-        from_address = (tx.get("from_address") or tx.get("address")).lower()
+        tx = tx or {}
+        from_address = (tx.get("from_address") or tx.get("address") or "").lower()
+        if not from_address:
+            raise ValueError("Identity extraction failed: from_address is missing")
         profile = get_profile(from_address)
         
         expected_nonce = int(profile.get("last_nonce", 0)) + 1
@@ -235,7 +244,10 @@ if __name__ == "__main__":
             pending_txs = fetch_pending_transactions()
             print(f"[INFO] Found {len(pending_txs)} pending transactions.")
             for tx_record in pending_txs:
-                process_transaction(tx_record)
+                try:
+                    process_transaction(tx_record)
+                except Exception as inner_e:
+                    print(f"[ERROR] Failed to process record: {inner_e}")
         except Exception as e:
             print(f"[ERROR] Queue processing failed: {e}")
     else:
