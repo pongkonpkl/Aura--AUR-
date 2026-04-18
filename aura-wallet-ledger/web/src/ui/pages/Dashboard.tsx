@@ -1591,12 +1591,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                             try { 
                                 // Bridges don't use 1e18 atom scaling because they aren't AUR
                                 if (isBridgeIn || isBridgeOut) return Number(tx.amount).toFixed(4);
-                                return ethers.formatUnits(tx.amount?.toString() || "0", 18); 
+                                return Number(ethers.formatUnits(tx.amount?.toString() || "0", 18)).toFixed(4); 
                             }
-                            catch { return "0.00"; }
+                            catch { return "0.0000"; }
                           })()}
                         </p>
-                        <p className="text-[8px] text-white/10 font-mono tracking-tighter">#{tx.tx_hash?.slice(-8) || 'unknown'}</p>
+                        <p className="text-[8px] text-white/10 font-mono tracking-tighter uppercase">#{String(tx.tx_hash || 'unknown').slice(-8)}</p>
                       </div>
                     </div>
                   );
