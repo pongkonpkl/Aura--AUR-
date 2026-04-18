@@ -44,9 +44,7 @@ const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax,
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'receive' | 'seed' | 'stake' | 'cloud' | null>(null);
-  const [isSeedRevealed, setIsSeedRevealed] = useState(false);
-  
+  const [activeModal, setActiveModal] = useState<'send' | 'stake' | null>(null);
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
   const [stakedBalanceAtom, setStakedBalanceAtom] = useState<string>("0");
   const [recipient, setRecipient] = useState("");
@@ -669,53 +667,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         </div>
       )}
 
-      {/* Receive Modal */}
-      {activeModal === 'receive' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content text-center" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-left">Your Deposit ID</h2>
-              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
-            </div>
-            
-            <div className="bg-white p-6 rounded-[2rem] inline-block mb-8 shadow-[0_0_40px_rgba(124,58,237,0.3)] border border-indigo-500/20">
-              <QRCodeSVG 
-                value={wallet.address} 
-                size={220}
-                level="H"
-                fgColor="#312e81"
-                includeMargin={true}
-                imageSettings={{
-                  src: `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDgiIGZpbGw9IiMxZTFiNGIiIHN0cm9rZT0iIzYzNjZmMSIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHRleHQgeD0iNTAiIHk9IjY1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNTAiIGZvbnQtd2VpZ2h0PSI5MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIj5BPC90ZXh0Pgo8L3N2Zz4=`,
-                  x: undefined, y: undefined, height: 60, width: 60, excavate: true,
-                }}
-              />
-            </div>
-            
-            <div className="relative group mb-6">
-              <p className="text-xs font-mono text-indigo-300 bg-indigo-500/10 py-4 px-6 rounded-2xl break-all line-clamp-2 border border-indigo-500/20 shadow-inner">
-                {wallet.address}
-              </p>
-              <button 
-                onClick={handleCopy}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all ${isCopied ? 'bg-emerald-500 text-white scale-110' : 'bg-white/10 text-white/60 hover:text-white hover:bg-indigo-600'}`}
-              >
-                {isCopied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-
-            <p className="text-sm text-white/40 leading-relaxed max-w-xs mx-auto">
-              Only send <span className="text-indigo-400 font-bold underline decoration-indigo-500/30">AUR token</span> to this address on the Sovereign Peer Network.
-            </p>
-
-            <div className="mt-8 pt-6 border-t border-white/5">
-                <p className="text-[10px] font-bold text-amber-500/50 uppercase tracking-widest italic">
-                  * All incoming transfers are subject to a 1% network fee.
-                </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Stake Modal */}
       {activeModal === 'stake' && (
@@ -849,44 +800,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             
             <div className="flex gap-4">
               <button 
-                onClick={() => {
-                  if (window.confirm("CAUTION: Disconnecting will WIPE your identity from this device. Continue?")) {
-                    onDisconnect();
-                  }
-                }}
-                className="px-4 py-2 bg-red-500/10 text-red-100 hover:bg-red-500/20 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10 uppercase tracking-widest"
-              >
-                Disconnect Node
-              </button>
-              
-              <button 
                 onClick={onLogout}
                 className="px-4 py-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-white/10 uppercase tracking-widest"
               >
                 <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
               </button>
             </div>
-             {/* Hero Pillars (Header Row) */}
+        {/* Hero Pillars (Header Row) */}
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-8">
-          {/* Sovereign Consensus - 40% */}
-          <div className="lg:col-span-4 glass-panel p-6 rounded-3xl relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-3xl rounded-full" />
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                  <Globe size={20} />
-                </div>
-                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Sovereign Consensus</span>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-6xl font-black tracking-tighter text-white">{networkStats.activeNodes}</p>
-                <p className="text-[10px] text-white/20 font-medium uppercase tracking-widest">Active Network Validators</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Celestial Treasury - 60% */}
-          <div className="lg:col-span-6 glass-panel p-8 rounded-3xl relative overflow-hidden group border border-indigo-500/10">
+          {/* Celestial Treasury - 100% Core Focus */}
+          <div className="lg:col-span-10 glass-panel p-8 rounded-3xl relative overflow-hidden group border border-indigo-500/10">
             <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 blur-3xl rounded-full" />
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
@@ -907,16 +830,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <button onClick={() => setActiveModal('send')} className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[11px] font-black uppercase transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center gap-2">
                    <ArrowUpRight size={14} /> Send
                 </button>
-                <button onClick={() => setActiveModal('receive')} className="px-10 py-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-2xl text-[11px] font-black uppercase transition-all border border-indigo-500/10 flex items-center gap-2">
-                   <ArrowDownLeft size={14} /> Receive
-                </button>
               </div>
-            </div>
-            
-            <div className="mt-8 pt-6 border-t border-white/5">
-                <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] font-mono italic">
-                   Protocol Charge: 1% Fee Per Outgoing Transfer
-                </p>
             </div>
           </div>
         </div>
@@ -1001,7 +915,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
               <div className="text-[10px] font-black text-white/20 uppercase tracking-widest">Last 15 Records</div>
             </div>
             <div className="max-h-[480px] overflow-y-auto divide-y divide-white/5 scrollbar-thin grow">
-de-white/5 scrollbar-thin grow">
               {history.map((tx, i) => {
                 const isOut = tx.from_address?.toLowerCase() === wallet.address.toLowerCase() && tx.tx_type === 'transfer';
                 const isStake = tx.tx_type === 'stake';
@@ -1059,22 +972,32 @@ de-white/5 scrollbar-thin grow">
                 <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
               </div>
               <div className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
-                <div className="w-1 h-1 rounded-full bg-indigo-500" /> SECURE
+                <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2E SECURE
               </div>
             </div>
             <div className="p-6 h-[360px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin grow">
               {logs.map((log, i) => (
-                <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/30'}`}>
+                <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/20'}`}>
                    <span className="opacity-20 select-none">❯</span> {log}
                 </div>
               ))}
             </div>
           </div>
         </div>
-          </div>
-        </div>
 
         <footer className="pt-12 text-center pb-20">
+          <div className="mb-8">
+             <button 
+                onClick={() => {
+                  if (window.confirm("CAUTION: Disconnecting will WIPE your identity from this device. Continue?")) {
+                    onDisconnect();
+                  }
+                }}
+                className="px-8 py-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-2xl font-bold text-xs transition-all border border-red-500/10 uppercase tracking-widest"
+              >
+                Disconnect Node
+              </button>
+          </div>
           <div className="mb-4 inline-flex items-center gap-2 px-6 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-full">
             <Shield size={12} className="text-indigo-400" />
             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Aura Sovereign Infrastructure • Autonomous Ledger Protocol</span>
