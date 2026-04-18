@@ -801,7 +801,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             <div className="flex gap-4">
               <button 
                 onClick={onLogout}
-                className="px-4 py-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-white/10 uppercase tracking-widest"
+                className="px-4 py-2 bg-red-500/5 text-red-400/80 hover:bg-red-500/10 rounded-xl font-bold text-[10px] transition-all flex items-center gap-2 border border-red-500/10 uppercase tracking-widest"
               >
                 <LogOut size={14}/> <span className="hidden lg:inline">Lock Wallet</span>
               </button>
