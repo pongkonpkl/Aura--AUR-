@@ -727,20 +727,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 />
               </div>
               <button 
-                disabled={isStaking || !stakeAmount || (() => {
-                  try {
-                    const amt = ethers.parseUnits(stakeAmount, 18);
-                    return amt > BigInt(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom);
-                  } catch { return true; }
-                })()} 
+                disabled={isStaking || !stakeAmount} 
                 onClick={stakingTab === 'stake' ? handleStake : handleUnstake} 
                 className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${
-                  isStaking || !stakeAmount || (() => {
-                    try {
-                      const amt = ethers.parseUnits(stakeAmount, 18);
-                      return amt > BigInt(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom);
-                    } catch { return true; }
-                  })()
+                  isStaking || !stakeAmount
                   ? (stakingTab === 'stake' ? 'bg-emerald-600/50' : 'bg-orange-600/50') + ' text-white/50 cursor-not-allowed' 
                   : (stakingTab === 'stake' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400') + ' text-white'
                 }`}
