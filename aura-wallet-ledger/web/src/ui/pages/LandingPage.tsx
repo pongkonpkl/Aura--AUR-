@@ -178,7 +178,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             <div className="relative z-10">
               <div className="w-16 h-16 flex items-center justify-center rounded-full border-2 border-indigo-500/40 bg-[#0a0a1a] shadow-[0_0_15px_rgba(124,58,237,0.4)] mx-auto mb-6">
                 <span className="text-3xl font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%]">
-                  AUR
+                  A
                 </span>
               </div>
               
@@ -354,10 +354,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
           <div className="flex flex-col items-center pointer-events-none mb-12">
             <div className="relative group">
               <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full scale-125" />
-            <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_40px_rgba(124,58,237,0.6)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a]">
+              <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_40px_rgba(124,58,237,0.6)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a]">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 via-transparent to-purple-600/30 rounded-full" />
-                <span className="text-[5rem] md:text-[7.5rem] leading-none font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%] font-sans tracking-tighter">
-                  AUR
+                <span className="text-[7rem] md:text-[9.5rem] leading-none font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%] font-sans tracking-tighter">
+                  A
                 </span>
               </div>
             </div>
