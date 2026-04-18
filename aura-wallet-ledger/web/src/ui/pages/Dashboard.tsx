@@ -1200,7 +1200,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 </p>
             </div>
           </div>
-          </div>
         </div>
       )}
 
