@@ -178,7 +178,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             <div className="relative z-10">
               <div className="w-16 h-16 flex items-center justify-center rounded-full border-2 border-indigo-500/40 bg-[#0a0a1a] shadow-[0_0_15px_rgba(124,58,237,0.4)] mx-auto mb-6">
                 <span className="text-3xl font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%]">
-                  A
+                  AUR
                 </span>
               </div>
               
@@ -354,21 +354,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
           <div className="flex flex-col items-center pointer-events-none mb-12">
             <div className="relative group">
               <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full scale-125" />
-              <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_40px_rgba(124,58,237,0.6)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a]">
+            <div className="pro-logo w-48 h-48 md:w-64 md:h-64 flex items-center justify-center relative z-10 drop-shadow-[0_0_40px_rgba(124,58,237,0.6)] rounded-full border-[3px] border-indigo-500/40 bg-[#0a0a1a]">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 via-transparent to-purple-600/30 rounded-full" />
-                <span className="text-[7rem] md:text-[9.5rem] leading-none font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%] font-sans tracking-tighter">
-                  A
+                <span className="text-[5rem] md:text-[7.5rem] leading-none font-black bg-gradient-to-b from-white via-indigo-100 to-purple-400 bg-clip-text text-transparent transform translate-y-[-2%] translate-x-[2%] font-sans tracking-tighter">
+                  AUR
                 </span>
               </div>
             </div>
           </div>
           
           <div className="hero-content-intro text-center">
-            <h1 className="text-6xl md:text-8xl font-bold mb-4 tracking-tighter bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent drop-shadow-2xl">
-              Aura: Fahsai
+            <h1 className="text-6xl md:text-9xl font-extrabold mb-4 tracking-tighter bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent drop-shadow-2xl">
+              AUR
             </h1>
             <p className="text-xl md:text-2xl text-indigo-200/80 font-light leading-relaxed mb-12">
-              The World's First Autonomous Sovereign Engine
+              The Sovereign Protocol for Autonomous Wealth
             </p>
             <div className="flex flex-col items-center gap-2 opacity-60">
               <span className="text-xs uppercase tracking-[0.3em] font-mono">Scroll to Discover</span>
@@ -393,7 +393,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             <Shield className="w-12 h-12 text-indigo-400 mx-auto mb-6 opacity-80" />
             <h2 className="text-4xl md:text-5xl font-bold mb-6">Sovereignty Rewritten</h2>
             <p className="text-lg md:text-2xl text-white/70 leading-relaxed font-light">
-              Fahsai isn’t just a wallet. It’s a local-first protocol that breathes in your own machine. Secure, private, and entirely yours. No middleman. No censorship.
+              AUR isn’t just a wallet. It’s a local-first protocol that breathes in your own machine. Secure, private, and entirely yours. No middleman. No censorship.
             </p>
           </div>
         </section>
