@@ -355,7 +355,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const VALID_OPS = ['transfer', 'stake', 'unstake', 'sync_legacy'];
     if (!VALID_OPS.includes(op)) throw new Error(`Security Violation: Invalid Cloud Operation (${op}).`);
 
-    const tx_hash = `queued-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const tx_hash = signature.startsWith('0x') ? ethers.keccak256(signature) : `queued-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     // Insert into Supabase Transaction Queue
     const { error } = await supabase
@@ -385,7 +385,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const currentNonce = await fetchNonce(wallet.address);
         const nextNonce = currentNonce + 1;
         
-        const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
+        const message = `[Aura Sovereign v1] AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
         const signature = await wallet.signMessage(message);
         
         const txHash = await submitCloudTx('transfer', { 
@@ -418,7 +418,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      const message = `[Aura Sovereign v1] AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('stake', { 
@@ -451,7 +451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      const message = `[Aura Sovereign v1] AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('unstake', { 
@@ -480,7 +480,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
+      const message = `[Aura Sovereign v1] AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
       const signature = await wallet.signMessage(message);
       
        const { data, error } = await supabase.rpc('rpc_claim_rewards', {

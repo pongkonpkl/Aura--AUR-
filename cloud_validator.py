@@ -140,26 +140,29 @@ def process_transaction(payload_src):
         signed_nonce = int(tx.get("nonce", 0))
         amount_atom = int(tx.get("amount_atom", tx.get("amount", 0)))
         
-        # High-Speed RPC might have sent 0 as placeholder, we check it later
-        if signed_nonce != 0 and signed_nonce != expected_nonce:
+        # Strict Nonce Enforcement: No bypasses allowed.
+        if signed_nonce != expected_nonce:
             err = f"Invalid nonce. Expected {expected_nonce}, got {signed_nonce}"
             print(f"[ERROR] {err}")
             if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err)
             return False
 
-        # Define message based on operation
+        # Define message based on operation with Versioned Prefix
+        prefix = "[Aura Sovereign v1] "
         message_variants = []
         if op == "withdraw":
-            message_variants.append(f"AUR_WITHDRAW_RPC:{signed_nonce}:{from_address}:{amount_atom}")
-            message_variants.append(f"AUR_WITHDRAW:{signed_nonce}:{from_address}:{amount_atom}")
+            message_variants.append(f"{prefix}AUR_WITHDRAW_RPC:{signed_nonce}:{from_address}:{amount_atom}")
+            message_variants.append(f"{prefix}AUR_WITHDRAW:{signed_nonce}:{from_address}:{amount_atom}")
         elif op == "transfer":
             to_address = tx.get("to_address", "").lower()
-            message_variants.append(f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}")
+            message_variants.append(f"{prefix}AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}")
         elif op in ["stake", "unstake"]:
-            message_variants.append(f"AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}")
+            message_variants.append(f"{prefix}AUR_{op.upper()}:{signed_nonce}:{from_address}:{amount_atom}")
         elif op == "swap":
             target = tx.get("target", "NATIVE")
-            message_variants.append(f"AUR_SWAP:{signed_nonce}:{from_address}:{amount_atom}:{target}")
+            message_variants.append(f"{prefix}AUR_SWAP:{signed_nonce}:{from_address}:{amount_atom}:{target}")
+        elif op == "claim":
+            message_variants.append(f"{prefix}AUR_CLAIM:{signed_nonce}:{from_address}")
         
         # Identity verification
         verified = False

@@ -123,7 +123,7 @@ async def tx_submit(request: Request):
     signed_nonce = int(tx.get("nonce", 0))
 
     try:
-        message_str = f"AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
+        message_str = f"[Aura Sovereign v1] AUR_TX:{signed_nonce}:{from_address}:{to_address}:{amount_atom}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
         if recovered_address.lower() != from_address:
@@ -206,7 +206,7 @@ async def stake_op(request: Request):
     signed_nonce = int(tx.get("nonce", 0))
 
     try:
-        message_str = f"AUR_{op.upper()}:{signed_nonce}:{address}:{amount_atom}"
+        message_str = f"[Aura Sovereign v1] AUR_{op.upper()}:{signed_nonce}:{address}:{amount_atom}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
         if recovered_address.lower() != address:
@@ -275,7 +275,7 @@ async def claim_op(request: Request):
     signed_nonce = int(tx.get("nonce", 0))
 
     try:
-        message_str = f"AUR_CLAIM:{signed_nonce}:{address}"
+        message_str = f"[Aura Sovereign v1] AUR_CLAIM:{signed_nonce}:{address}"
         message = encode_defunct(text=message_str)
         recovered_address = Account.recover_message(message, signature=signature)
         if recovered_address.lower() != address:
