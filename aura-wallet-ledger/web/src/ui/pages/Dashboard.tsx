@@ -628,16 +628,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const action = async () => {
         setIsSending(true);
         try {
-            const amountAtom = BigInt(Math.floor(parseFloat(sendAmount) * 1e18));
+            const amountAtom = ethers.parseUnits(sendAmount, 18);
             const currentNonce = await fetchNonce(wallet.address);
             const nextNonce = currentNonce + 1;
             
-            const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom}`;
+            const message = `AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
             const signature = await wallet.signMessage(message);
             
             const txHash = await submitCloudTx('transfer', { 
-                from_address: wallet.address, 
-                to_address: recipient, 
+                from_address: wallet.address.toLowerCase(), 
+                to_address: recipient.toLowerCase(), 
                 amount_atom: amountAtom.toString(),
                 nonce: nextNonce 
             }, signature);
@@ -1130,8 +1130,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   onChange={(e: any) => setSendAmount(e.target.value)}
                   asset="AUR"
                   maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
-                  onSetMax={() => setSendAmount(ethers.formatUnits(balanceAtom, 18))}
+                  onSetMax={() => {
+                        const total = parseFloat(ethers.formatUnits(balanceAtom, 18));
+                        const smartMax = total / 1.01;
+                        setSendAmount(smartMax.toFixed(6));
+                  }}
                 />
+                <div className="mt-4 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-2 animate-in fade-in slide-in-from-top-2">
+                   <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
+                      <span>Network Fee (1%)</span>
+                      <span className="text-red-400/80">{(parseFloat(sendAmount || "0") * 0.01).toFixed(6)} AUR</span>
+                   </div>
+                   <div className="flex justify-between items-center text-sm font-black uppercase tracking-tight">
+                      <span className="text-white/60">Total Receive</span>
+                      <span className="text-emerald-400">{(parseFloat(sendAmount || "0") * 0.99).toFixed(6)} AUR</span>
+                   </div>
+                </div>
               </div>
               <button disabled={isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
                 {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
@@ -1179,6 +1193,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             <p className="text-sm text-white/40 leading-relaxed max-w-xs mx-auto">
               Only send <span className="text-indigo-400 font-bold underline decoration-indigo-500/30">AUR token</span> to this address on the Sovereign Peer Network.
             </p>
+
+            <div className="mt-8 pt-6 border-t border-white/5">
+                <p className="text-[10px] font-bold text-amber-500/50 uppercase tracking-widest italic">
+                  * All incoming transfers are subject to a 1% network fee.
+                </p>
+            </div>
+          </div>
           </div>
         </div>
       )}
@@ -1420,7 +1441,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setActiveModal('send')}
-                    className="flex-1 py-4 bg-indigo-500/10 text-indigo-400 font-bold rounded-2xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                    className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
                   >
                     <ArrowUpRight size={18} /> Send
                   </button>
@@ -1430,6 +1451,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   >
                     <ArrowDownLeft size={18} /> Receive
                   </button>
+                </div>
+                <div className="mt-4 text-center">
+                    <p className="text-[9px] font-bold text-white/20 uppercase tracking-[0.2em] italic">
+                      Protocol Charge: 1% Fee Per Outgoing Transfer
+                    </p>
                 </div>
               </div>
 
