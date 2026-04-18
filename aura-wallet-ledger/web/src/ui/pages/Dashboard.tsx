@@ -298,9 +298,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           const pendingUnstake = currentPending.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
           const pendingOut = currentPending.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
 
-          // Adjusted view for the user
-          const displayBalance = serverBalance - pendingStake + pendingUnstake - pendingOut;
-          const displayStaked = serverStaked + pendingStake - pendingUnstake;
+          // Adjusted view for the user (With Safety Lock to prevent Negative Balances)
+          const displayBalance = (serverBalance + pendingUnstake) - (pendingStake + pendingOut);
+          const displayStaked = (serverStaked + pendingStake) - pendingUnstake;
+
+          const safeBalance = displayBalance < 0n ? 0n : displayBalance;
+          const safeStaked = displayStaked < 0n ? 0n : displayStaked;
+          
+          setBalanceAtom(safeBalance.toString());
+          setStakedBalanceAtom(safeStaked.toString());
 
           // Sync Multi-Vault Assets
           setNativeBalance(serverProfile.native_balance != null ? Number(serverProfile.native_balance).toFixed(2) : "0.00");
@@ -349,8 +355,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
     // 📈 Optimistic Reward Counter (Real-time Feedback)
     const optimisticInterval = setInterval(() => {
-        setOptimisticReward(prev => prev + 100000000000000n); 
-    }, 10000);
+        // Smoother pulse: increment every 100ms
+        // Original: 0.0001 (10^14) per 10s
+        // New: 0.000001 (10^12) per 100ms
+        setOptimisticReward(prev => prev + 1000000000000n); 
+    }, 100);
 
     return () => {
       clearInterval(syncInterval);
@@ -1462,13 +1471,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                        </div>
                        <span className="text-sm font-bold text-white/40 uppercase tracking-widest">Reward Accrual</span>
                      </div>
-                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 text-[9px] font-black italic">
-                        AUR PROTOCOL
-                     </div>
+                     <div className="flex flex-col items-center justify-center px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20 text-[9px] font-black italic leading-[1.1]">
+                         <span>AUR</span>
+                         <span>PROTOCOL</span>
+                      </div>
                    </div>
                    <div className="space-y-1 mb-8">
                      <p className="text-4xl font-bold tracking-tighter text-amber-500 group-hover:scale-105 transition-transform origin-left">
-                       {ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18).slice(0, 10)}
+                       {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}
                        <span className="text-xl opacity-30"> AUR</span>
                      </p>
                      <p className="text-[10px] text-amber-500/60 font-medium tracking-tight">
@@ -1478,11 +1488,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                    <button 
                      disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
                      onClick={handleClaim}
-                     className={`w-full py-4 bg-amber-500 text-black font-black text-xs uppercase rounded-xl shadow-lg shadow-amber-500/20 hover:bg-amber-400 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                     className={`w-full py-4 bg-amber-500 text-black font-black text-xs uppercase rounded-xl shadow-lg shadow-amber-500/20 hover:bg-amber-400 hover:scale-[1.02] active:scale-95 transition-all relative flex items-center justify-center ${
                        isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n ? 'opacity-20 grayscale pointer-events-none' : ''
                      }`}
                    >
-                     {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <PlusCircle size={14} />}
+                     <div className="absolute left-6">
+                        {isClaiming ? <RefreshCw size={14} className="animate-spin" /> : <PlusCircle size={14} />}
+                     </div>
                      Claim Sovereign Rewards
                    </button>
                  </div>
