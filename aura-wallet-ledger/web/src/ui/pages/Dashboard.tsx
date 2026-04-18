@@ -158,13 +158,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           .single();
 
         if (globalStats) {
-          setTotalEmission(globalStats.total_supply_atom?.toString() || "0");
-          setDailyEmission(globalStats.daily_mined_atom?.toString() || "0");
-          setActiveNodesCount(Number(globalStats.total_wallets || 0));
-          setNetworkStats({ 
-            activeNodes: Number(globalStats.total_wallets || 0), 
-            sharedPool: Number(ethers.formatUnits(globalStats.daily_mined_atom || "0", 18)).toFixed(4)
-          });
+          try {
+            setTotalEmission(globalStats.total_supply_atom?.toString() || "0");
+            setDailyEmission(globalStats.daily_mined_atom?.toString() || "0");
+            
+            const minedUnits = ethers.formatUnits(globalStats.daily_mined_atom?.toString() || "0", 18);
+            
+            setNetworkStats({ 
+              activeNodes: Number(globalStats.total_wallets || 0), 
+              sharedPool: Number(minedUnits).toFixed(4)
+            });
+          } catch (e) {
+            console.error("Stats Parse Error:", e);
+          }
         }
 
         // 2. Fetch Authoritative Profile & Balance via Singularity Mapper
@@ -181,14 +187,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const serverProfile = Array.isArray(profile) ? profile[0] : profile;
 
         if (serverProfile) {
-          let serverBalance = BigInt(serverProfile.balance_atom || "0");
-          let serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
-          if (serverProfile.pending_reward_atom) setPendingRewardAtom(serverProfile.pending_reward_atom);
-
-          // Apply Optimistic Offsets (Using Ref to prevent Stale Closure/Bouncing)
-          const currentPending = pendingTxsRef.current;
-          const pendingStake = currentPending.filter(t => t.type === 'stake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
-          const pendingUnstake = currentPending.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
           const pendingOut = currentPending.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
 
           // Adjusted view for the user (With Safety Lock to prevent Negative Balances)
@@ -956,25 +954,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             </div>
           </div>
 
-          {/* Console */}
-          <div className="glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
-            <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <TerminalIcon size={16} className="text-indigo-400" />
-                <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Peer Telemetry Stream</span>
-              </div>
-              <div className="text-[10px] text-white/20 uppercase tracking-widest flex items-center gap-1">
-                <div className="w-1 h-1 rounded-full bg-indigo-500" /> E2E SECURE
-              </div>
-            </div>
-            <div className="p-6 h-[360px] font-mono text-[10px] overflow-y-auto space-y-2 scrollbar-thin grow">
-              {logs.map((log, i) => (
-                <div key={i} className={`flex gap-4 ${i === 0 ? 'text-indigo-300 font-bold' : 'text-white/20'}`}>
-                   <span className="opacity-20 select-none">❯</span> {log}
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         <footer className="pt-12 text-center pb-20">
