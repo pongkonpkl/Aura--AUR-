@@ -37,31 +37,46 @@ const SovereignModal = ({ isOpen, onClose, title, children }: any) => {
   );
 };
 
-const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder, status }: any) => (
-  <div className="space-y-1">
-     <div className="flex justify-between items-center px-1 mb-1">
-        {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">{label}</label>}
-        {status}
-     </div>
-     <div className="relative group">
-       <input 
-          type="text"
-          className="w-full bg-[#111] border border-white/5 rounded-2xl p-4 text-xl font-mono font-bold text-white placeholder-white/10 focus:border-indigo-500/30 hover:border-white/10 outline-none transition-all pr-24"
-          placeholder={placeholder || "0.00"}
-          value={value}
-          onChange={onChange}
-       />
-       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-white/20 uppercase tracking-widest">{asset}</span>
-     </div>
-     <div className="flex justify-between items-center px-1 pt-1 opacity-60">
-       <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{subtext}</span>
-       <div className="text-[9px] flex items-center gap-1.5 uppercase tracking-wider font-bold">
-          <span className="text-white/20">{maxAvailable} AVAILABLE</span>
-          <button onClick={onSetMax} className="text-indigo-400 hover:text-indigo-300 transition-all">Max</button>
+const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder, status }: any) => {
+  const handleChange = (e: any) => {
+    let val = e.target.value;
+    // 🕵️ Smart Filtering: Auto-fix 'o' typos and block non-numeric
+    val = val.replace(/[oO]/g, '0'); // Fix o -> 0
+    val = val.replace(/[^0-9.]/g, ''); // Numeric and dot only
+    
+    // Prevent multiple dots
+    const dots = val.split('.').length - 1;
+    if (dots > 1) return; 
+
+    onChange({ target: { value: val } });
+  };
+
+  return (
+    <div className="space-y-1">
+       <div className="flex justify-between items-center px-1 mb-1">
+          {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">{label}</label>}
+          {status}
        </div>
-     </div>
-  </div>
-);
+       <div className="relative group">
+         <input 
+            type="text"
+            className="w-full bg-[#111] border border-white/5 rounded-2xl p-4 text-xl font-mono font-bold text-white placeholder-white/10 focus:border-indigo-500/30 hover:border-white/10 outline-none transition-all pr-24"
+            placeholder={placeholder || "0.00"}
+            value={value}
+            onChange={handleChange}
+         />
+         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-white/20 uppercase tracking-widest">{asset}</span>
+       </div>
+       <div className="flex justify-between items-center px-1 pt-1 opacity-60">
+         <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{subtext}</span>
+         <div className="text-[9px] flex items-center gap-1.5 uppercase tracking-wider font-bold">
+            <span className="text-white/20">{maxAvailable} AVAILABLE</span>
+            <button onClick={onSetMax} className="text-indigo-400 hover:text-indigo-300 transition-all">Max</button>
+         </div>
+       </div>
+    </div>
+  );
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
@@ -453,11 +468,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     if(!recipient || !sendAmount) return;
     setIsSending(true);
     try {
-        const amountAtom = ethers.parseUnits(sendAmount, 18);
+        const cleanAmount = sendAmount.trim();
+        if (!cleanAmount || isNaN(Number(cleanAmount))) throw new Error("Invalid Transaction Amount: Please enter a valid number.");
+        
+        const amountAtom = ethers.parseUnits(cleanAmount, 18);
         const currentNonce = await fetchNonce(wallet.address);
         const nextNonce = currentNonce + 1;
         
         const message = `[Aura Sovereign v1] AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
+        addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
         const signature = await wallet.signMessage(message);
         
         const txHash = await submitCloudTx('transfer', { 
@@ -484,13 +503,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      const amountAtom = ethers.parseUnits(stakeAmount, 18);
+      const cleanAmount = stakeAmount.trim();
+      if (!cleanAmount || isNaN(Number(cleanAmount))) throw new Error("Invalid Stake Amount: Please enter a valid number.");
+      
+      const amountAtom = ethers.parseUnits(cleanAmount, 18);
       if (amountAtom > BigInt(balanceAtom)) throw new Error("Insufficient Liquid Balance");
       
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
       const message = `[Aura Sovereign v1] AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('stake', { 
@@ -517,13 +540,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     if(!stakeAmount) return;
     setIsStaking(true);
     try {
-      const amountAtom = ethers.parseUnits(stakeAmount, 18);
+      const cleanAmount = stakeAmount.trim();
+      if (!cleanAmount || isNaN(Number(cleanAmount))) throw new Error("Invalid Unstake Amount: Please enter a valid number.");
+      
+      const amountAtom = ethers.parseUnits(cleanAmount, 18);
       if (amountAtom > BigInt(stakedBalanceAtom)) throw new Error("Insufficient Staked Balance");
       
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
       const message = `[Aura Sovereign v1] AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
+      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('unstake', { 
@@ -553,6 +580,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const nextNonce = currentNonce + 1;
 
       const message = `[Aura Sovereign v1] AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
+      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
       const signature = await wallet.signMessage(message);
       
        const { data, error } = await supabase.rpc('rpc_claim_rewards', {
