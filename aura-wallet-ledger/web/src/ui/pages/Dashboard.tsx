@@ -827,19 +827,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         <SovereignModal 
           isOpen={activeModal === 'send'} 
           onClose={() => setActiveModal(null)} 
-          title="Cele          <div className="space-y-8">
-            <div className="space-y-4">
-               <SovereignInput 
-                  label="Recipient Identity"
-                  value={recipient}
-                  onChange={(e: any) => setRecipient(e.target.value)}
-                  placeholder="0x... or Aura Address"
-                  status={
-                    <>
-                      {isCheckingRecipient && (
-        <SovereignModal 
-          isOpen={activeModal === 'send'} 
-          onClose={() => setActiveModal(null)} 
           title="Celestial Transfer"
         >
           <div className="space-y-8">
