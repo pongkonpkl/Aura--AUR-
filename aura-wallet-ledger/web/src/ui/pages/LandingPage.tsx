@@ -34,6 +34,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
     e.preventDefault();
     if(password.length >= 4) {
       if ((authMode === 'create_step2' || authMode === 'import') && generatedWallet) {
+        // 🛡️ Sovereign Purge: Remove legacy v1/v2 corrupted atoms before new generation
+        localStorage.removeItem('aura_identity_v1');
+        localStorage.removeItem('aura_identity_v2'); 
+        
         // Encrypt wallet mnemonic with pin (Works for both New and Imported)
         const phrase = generatedWallet.mnemonic?.phrase || '';
         const encryptedKey = CryptoJS.AES.encrypt(phrase, password).toString();

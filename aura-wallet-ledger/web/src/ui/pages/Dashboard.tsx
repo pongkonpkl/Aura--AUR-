@@ -556,7 +556,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const nextNonce = currentNonce + 1;
 
       const message = buildConsensusMessage('STAKE', nextNonce, wallet.address, '', amountAtom.toString());
-      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
+      // Deep Diagnostic: Display more message data for V3 Verification
+      addLog(`Consensus V3 Signing: ${message.slice(0, 64)}...`);
+      addLog(`Signer Identity Check: ${wallet.address.slice(0, 10)}... (Internal)`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('stake', { 
@@ -593,7 +595,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const nextNonce = currentNonce + 1;
 
       const message = buildConsensusMessage('UNSTAKE', nextNonce, wallet.address, '', amountAtom.toString());
-      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
+      addLog(`Consensus V3 Signing: ${message.slice(0, 64)}...`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('unstake', { 
