@@ -878,14 +878,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                       size={180} 
                       level="H" 
                       includeMargin={false}
-                      imageSettings={{
-                         src: "https://i.ibb.co/vz6mD8y/aura-logo-mini.png", 
-                         x: undefined, 
-                         y: undefined, 
-                         height: 24, 
-                         width: 24, 
-                         excavate: true,
-                      }}
                     />
                   </div>
                </div>
