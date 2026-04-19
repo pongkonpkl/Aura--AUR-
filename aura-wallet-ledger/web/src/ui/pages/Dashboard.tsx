@@ -3,7 +3,7 @@ import {
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
   X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2, Lock, Zap, PlusCircle, ArrowDownRight, Bitcoin, TrendingUp
+  Copy, Scan, Camera, Maximize2, Lock, Zap, PlusCircle, ArrowDownRight, Bitcoin, TrendingUp, ExternalLink
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
