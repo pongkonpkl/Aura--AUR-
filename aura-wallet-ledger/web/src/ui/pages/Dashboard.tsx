@@ -3,7 +3,7 @@ import {
   Activity, Shield, Coins, Power, LogOut, Cpu, Globe, 
   Database, Terminal as TerminalIcon, ArrowUpRight, ArrowDownLeft, 
   X, AlertCircle, CheckCircle2, RefreshCw, Key, Home, Eye, EyeOff,
-  Copy, Scan, Camera, Maximize2, Lock, Zap, PlusCircle, ArrowDownRight, Bitcoin
+  Copy, Scan, Camera, Maximize2, Lock, Zap, PlusCircle, ArrowDownRight, Bitcoin, TrendingUp
 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,25 +17,44 @@ interface DashboardProps {
   wallet: ethers.Wallet;
 }
 
-const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext }: any) => (
+const SovereignModal = ({ isOpen, onClose, title, children }: any) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-[#0a0a0b] bg-gradient-to-br from-indigo-500/[0.03] to-purple-500/[0.03] rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500">
+        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+           <h2 className="text-sm font-black text-white/40 uppercase tracking-[0.3em]">{title}</h2>
+           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/20 hover:text-white transition-all">
+             <X size={20} />
+           </button>
+        </div>
+        <div className="p-8">
+           {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder }: any) => (
   <div className="space-y-1">
      {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest px-1">{label}</label>}
      <div className="relative group">
        <input 
-          type="number"
-          className="w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-4 text-xl font-mono font-bold text-white placeholder-white/20 focus:border-white/30 hover:border-white/20 outline-none transition-all pr-24"
-          placeholder="0.00"
-          step="any"
+          type="text"
+          className="w-full bg-[#111] border border-white/5 rounded-2xl p-4 text-xl font-mono font-bold text-white placeholder-white/10 focus:border-indigo-500/30 hover:border-white/10 outline-none transition-all pr-24"
+          placeholder={placeholder || "0.00"}
           value={value}
           onChange={onChange}
        />
-       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-white flex items-center gap-1">{asset} <span className="text-[10px]">↕</span></span>
+       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-white/20 uppercase tracking-widest">{asset}</span>
      </div>
-     <div className="flex justify-between items-center px-1 pt-1">
-       <span className="text-[11px] text-white/50 font-medium">{subtext || `$0.00`}</span>
-       <div className="text-[11px] flex items-center gap-1.5">
-          <span className="text-white/50">{maxAvailable} {asset} available</span>
-          <button onClick={onSetMax} className="text-[#3b82f6] hover:text-blue-400 font-bold transition-all p-1">Max</button>
+     <div className="flex justify-between items-center px-1 pt-1 opacity-60">
+       <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{subtext}</span>
+       <div className="text-[9px] flex items-center gap-1.5 uppercase tracking-wider font-bold">
+          <span className="text-white/20">{maxAvailable} AVAILABLE</span>
+          <button onClick={onSetMax} className="text-indigo-400 hover:text-indigo-300 transition-all">Max</button>
        </div>
      </div>
   </div>
@@ -957,6 +976,117 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
           </div>
 
         </div>
+        
+        {/* Sovereign Modals Implementation */}
+        <SovereignModal 
+          isOpen={activeModal === 'send'} 
+          onClose={() => setActiveModal(null)} 
+          title="Celestial Transfer"
+        >
+          <div className="space-y-8">
+            <div className="space-y-4">
+               <div className="flex justify-between items-center px-1">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Recipient Identity</label>
+                  <button onClick={() => setIsScannerOpen(!isScannerOpen)} className="p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg hover:bg-indigo-500/20 transition-all">
+                     <Scan size={14} />
+                  </button>
+               </div>
+               
+               <div className="relative">
+                  <input 
+                    type="text"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="0x... or Aura Address"
+                    className="w-full bg-[#111] border border-white/5 rounded-2xl p-4 text-sm font-mono text-white placeholder-white/10 focus:border-indigo-500/30 outline-none transition-all"
+                  />
+                  {isCheckingRecipient && <RefreshCw size={14} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-white/20" />}
+                  {recipientProfile?.exists && <CheckCircle2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />}
+               </div>
+               {recipientProfile?.nick && (
+                 <div className="px-1 text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider">Verified: {recipientProfile.nick}</div>
+               )}
+            </div>
+
+            <SovereignInput 
+               label="Amount to Broadcast"
+               value={sendAmount}
+               onChange={(e: any) => setSendAmount(e.target.value)}
+               asset="AUR"
+               maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
+               onSetMax={() => setSendAmount(ethers.formatUnits(balanceAtom, 18))}
+            />
+
+            <div className="p-6 bg-indigo-500/[0.02] border border-white/5 rounded-3xl space-y-3">
+               <div className="flex justify-between items-center text-[10px] font-black">
+                  <span className="text-white/20 uppercase tracking-widest">Network Fee</span>
+                  <span className="text-white/40">~0.0001 AUR</span>
+               </div>
+               <div className="flex justify-between items-center text-[10px] font-black">
+                  <span className="text-white/20 uppercase tracking-widest">Total Settle</span>
+                  <span className="text-white">{(Number(sendAmount || 0) + 0.0001).toFixed(6)} AUR</span>
+               </div>
+            </div>
+
+            <button 
+               onClick={handleSend}
+               disabled={isSending || !isValidAddress || !sendAmount}
+               className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 disabled:grayscale text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center justify-center gap-3"
+            >
+               {isSending ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>}
+               {isSending ? 'Initializing Propagation...' : 'Confirm Broadcast'}
+            </button>
+          </div>
+        </SovereignModal>
+
+        <SovereignModal 
+          isOpen={activeModal === 'stake'} 
+          onClose={() => setActiveModal(null)} 
+          title="Sovereign Vault"
+        >
+          <div className="space-y-8">
+            <div className="flex p-1 bg-[#111] rounded-2xl border border-white/5">
+                <button 
+                  onClick={() => setStakingTab('stake')}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${stakingTab === 'stake' ? 'bg-white/5 text-white' : 'text-white/20 hover:text-white/40'}`}
+                >Deposit</button>
+                <button 
+                   onClick={() => setStakingTab('unstake')}
+                   className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${stakingTab === 'unstake' ? 'bg-white/5 text-white' : 'text-white/20 hover:text-white/40'}`}
+                >Withdraw</button>
+            </div>
+
+            <SovereignInput 
+               label={stakingTab === 'stake' ? 'Amount to Stake' : 'Amount to Release'}
+               value={stakeAmount}
+               onChange={(e: any) => setStakeAmount(e.target.value)}
+               asset="AUR"
+               maxAvailable={stakingTab === 'stake' ? Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4) : Number(ethers.formatUnits(stakedBalanceAtom, 18)).toFixed(4)}
+               onSetMax={() => setStakeAmount(stakingTab === 'stake' ? ethers.formatUnits(balanceAtom, 18) : ethers.formatUnits(stakedBalanceAtom, 18))}
+            />
+
+            <div className="p-6 bg-emerald-500/[0.02] border border-emerald-500/10 rounded-3xl space-y-4">
+               <div className="flex items-start gap-4">
+                  <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
+                     <TrendingUp size={16} />
+                  </div>
+                  <div>
+                     <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Global Protocol Yield</p>
+                     <p className="text-[9px] text-white/30 font-bold uppercase tracking-tighter mt-1">+1.0 AUR shared daily across the fleet</p>
+                  </div>
+               </div>
+            </div>
+
+            <button 
+               onClick={handleStake}
+               disabled={isStaking || !stakeAmount}
+               className={`w-full py-5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-20 disabled:grayscale text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-600/20 active:scale-95 flex items-center justify-center gap-3`}
+            >
+               {isStaking ? <RefreshCw className="animate-spin" size={16}/> : <Lock size={16}/>}
+               {isStaking ? 'Verifying Allocation...' : stakingTab === 'stake' ? 'Activate Stake' : 'Deactivate Stake'}
+            </button>
+          </div>
+        </SovereignModal>
 
         <footer className="pt-12 text-center pb-20">
           <div className="mb-8">
