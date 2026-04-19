@@ -100,7 +100,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const [stakingTab, setStakingTab] = useState<'stake' | 'unstake'>('stake');
   const [totalEmission, setTotalEmission] = useState<string>("0");
-  const [dailyEmission, setDailyEmission] = useState<string>("0");
+  const [dailyEmission, setDailyEmission] = useState<string>("1000000000000000000"); // 1 AUR / day
+  const [totalStakedGlobal, setTotalStakedGlobal] = useState<string>("0");
   const [activeNodesCount, setActiveNodesCount] = useState<number>(0);
   const [pendingTxs, setPendingTxs] = useState<any[]>([]);
   const pendingTxsRef = useRef<any[]>([]);
@@ -202,9 +203,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         if (globalStats) {
           try {
             setTotalEmission(globalStats.total_supply_atom?.toString() || "0");
-            setDailyEmission(globalStats.daily_mined_atom?.toString() || "0");
+            setDailyEmission(globalStats.daily_mined_atom?.toString() || "1000000000000000000");
+            setTotalStakedGlobal(globalStats.total_staked_atom?.toString() || "0");
             
-            const minedUnits = ethers.formatUnits(globalStats.daily_mined_atom?.toString() || "0", 18);
+            const minedUnits = ethers.formatUnits(globalStats.daily_mined_atom?.toString() || "1000000000000000000", 18);
             
             setNetworkStats({ 
               activeNodes: Number(globalStats.total_wallets || 0), 
@@ -285,12 +287,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const syncInterval = setInterval(syncWithSupabase, 15000);
     const heartbeatInterval = setInterval(heartbeat, 60000);
 
-    // 📈 Smart Calibration: Sync Tick to exactly match Daily Emission
+    // 📈 Smooth Aura: Real-time Proportional Reward Ticker
     const optimisticInterval = setInterval(() => {
-        // Calculation: 1 AUR / 864,000 intervals (100ms) = ~1.157 * 10^12 atoms
-        // This ensures the UI counter stays perfectly in sync with the Cloud Validator.
-        const emissionPer100ms = BigInt(dailyEmission) / 864000n;
-        setOptimisticReward(prev => prev + (emissionPer100ms > 0n ? emissionPer100ms : 1000000000000n)); 
+        const uStaked = BigInt(stakedBalanceAtom || "0");
+        const gStaked = BigInt(totalStakedGlobal || "0");
+        const pool = BigInt(dailyEmission || "1000000000000000000");
+
+        if (gStaked > 0n && uStaked > 0n) {
+          // Precise calculation: (user_staked * daily_pool) / (global_staked * intervals_per_day)
+          // 864,000 intervals (100ms each) in a day
+          const rewardPer100ms = (uStaked * pool) / (gStaked * 864000n);
+          setOptimisticReward(prev => prev + (rewardPer100ms > 0n ? rewardPer100ms : 1n)); 
+        }
     }, 100);
 
     return () => {
@@ -615,7 +623,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const nextNonce = currentNonce + 1;
 
       const message = buildConsensusMessage('CLAIM', nextNonce, wallet.address);
-      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
+      addLog(`Consensus V3 Signing: ${message.slice(0, 48)}...`);
       const signature = await wallet.signMessage(message);
       
        const { data, error } = await supabase.rpc('rpc_claim_rewards', {
@@ -628,10 +636,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
        if (!data.success) throw new Error(data.error);
 
        addLog(`✅ Reward Claimed: ${ethers.formatUnits(data.claimed_amount, 18)} AUR`);
-       setPendingRewardAtom("0");
        setOptimisticReward(0n);
        setBalanceAtom((BigInt(balanceAtom) + BigInt(data.claimed_amount)).toString());
        setLastCloudOpTime(Date.now());
+       setActiveModal(null);
     } catch(e: any) {
       addLog(`❌ Claim Error: ${e.message}`);
     }
