@@ -97,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const LOCAL_ENGINE_URL = "http://localhost:8000";
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
 
-  const isValidAddress = recipient.startsWith('0x') && recipient.length === 42;
+  const isValidAddress = (recipient.startsWith('0x') && recipient.length === 42) || (recipientProfile?.exists && recipient.length > 0);
   const isSelfSend = recipient.toLowerCase() === wallet.address.toLowerCase();
 
 
@@ -529,237 +529,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   return (
     <div className="min-h-screen p-4 md:p-8 animate-in fade-in zoom-in-95 duration-1000 relative">
-      
-      {/* Diagnostic Overlay */}
-      {!isEngineReady && (
-        <div className="modal-overlay">
-          <div className="modal-content text-center border-indigo-500/20 shadow-indigo-500/10 max-w-2xl">
-            <div className="w-20 h-20 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <RefreshCw className="text-indigo-500 w-10 h-10 animate-spin" />
-            </div>
-            <h2 className="text-2xl font-bold mb-4">Synchronizing Aura Cloud</h2>
-            <p className="text-white/50 mb-8 leading-relaxed">
-              Establishing secure connection to Supabase Off-chain Backend. This fixes the "Link Restricted" error by using cloud-hosted HTTPS.
-            </p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-white/90 transition-all text-sm"
-            >
-              <RefreshCw size={18} /> Retry Connection
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Sovereign Architecture: Real-time Cloud Settlement Active */}
 
-
-
-      {/* Send Modal */}
-      {activeModal === 'send' && (
-        <div className="modal-overlay" onClick={() => { setActiveModal(null); setIsScannerOpen(false); }}>
-          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold">Initiate Transfer</h2>
-              <button onClick={() => { setActiveModal(null); setIsScannerOpen(false); }} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="relative">
-                <label className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2 block">Recipient Address</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1 group">
-                    <input 
-                      value={recipient} 
-                      onChange={e=>setRecipient(e.target.value)} 
-                      type="text" 
-                      placeholder="0x..." 
-                      className={`w-full bg-white/5 border rounded-xl px-4 py-4 outline-none transition-all font-mono text-sm pr-12 ${
-                        isValidAddress === true ? 'border-emerald-500/50 focus:border-emerald-500 text-emerald-100' : 
-                        isValidAddress === false ? 'border-red-500/50 focus:border-red-500 text-red-100' : 
-                        'border-white/10 focus:border-indigo-500'
-                      }`} 
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                      {isValidAddress === true && !isSelfSend && <CheckCircle2 size={18} className="text-emerald-500 animate-in zoom-in duration-300" />}
-                      {isValidAddress === true && isSelfSend && <AlertCircle size={18} className="text-orange-500 animate-in bounce duration-300" />}
-                      {isValidAddress === false && <AlertCircle size={18} className="text-red-500 animate-in shake duration-300" />}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsScannerOpen(!isScannerOpen)}
-                    className={`p-4 rounded-xl transition-all border ${isScannerOpen ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:text-white'}`}
-                  >
-                    <Scan size={20} />
-                  </button>
-                </div>
-                {isValidAddress === false && (
-                  <p className="text-[10px] font-bold text-red-500 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
-                    Invalid Sovereign Address Format or Checksum Error
-                  </p>
-                )}
-                {isValidAddress === true && isCheckingRecipient && (
-                  <p className="text-[10px] font-bold text-indigo-400 mt-2 uppercase tracking-tighter animate-pulse">
-                    🔍 Verifying Identity in Aura Universe...
-                  </p>
-                )}
-                {isValidAddress === true && !isCheckingRecipient && recipientProfile?.exists && (
-                  <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase tracking-tighter flex items-center gap-1 animate-in zoom-in duration-300">
-                    <CheckCircle2 size={12} /> Verified AUR Resident {recipientProfile.nick ? `(${recipientProfile.nick})` : ''}
-                  </p>
-                )}
-                {isValidAddress === true && !isCheckingRecipient && recipientProfile && !recipientProfile.exists && (
-                  <p className="text-[10px] font-bold text-amber-500 mt-2 uppercase tracking-tighter flex items-center gap-1 animate-in slide-in-from-left-2">
-                    ⚠️ New Sovereign Address (No History Detected)
-                  </p>
-                )}
-                {isValidAddress === true && isSelfSend && (
-                  <p className="text-[10px] font-bold text-orange-400 mt-2 uppercase tracking-tighter animate-in slide-in-from-top-1">
-                    ⚠️ Warning: You are sending AUR to your own Sovereign Identity
-                  </p>
-                )}
-              </div>
-
-              {isScannerOpen && (
-                <div className="animate-in fade-in slide-in-from-top-4 duration-500">
-                  <div className="relative bg-black rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
-                    <div id="scanner-region" className="w-full aspect-square" />
-                    
-                    {/* Scanner UI Overlays */}
-                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                       <div className="w-64 h-64 border-2 border-indigo-500/50 rounded-3xl relative">
-                          <div className="absolute inset-0 animate-pulse border-2 border-indigo-500 rounded-3xl" />
-                       </div>
-                    </div>
-
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 px-4">
-                      {cameras.length > 1 && (
-                        <button 
-                          onClick={() => {
-                            const nextIdx = (cameras.findIndex(c => c.id === activeCameraId) + 1) % cameras.length;
-                            setActiveCameraId(cameras[nextIdx].id);
-                          }}
-                          className="px-4 py-2 bg-black/60 backdrop-blur-md rounded-full text-xs font-bold flex items-center gap-2 border border-white/10"
-                        >
-                          <Camera size={14} /> Switch Camera
-                        </button>
-                      )}
-                      <button 
-                         onClick={() => setIsScannerOpen(false)}
-                         className="px-4 py-2 bg-red-500/20 backdrop-blur-md rounded-full text-xs font-bold text-red-400 border border-red-500/20"
-                      >
-                         Close Scanner
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <SovereignInput 
-                  label="Amount to Transfer"
-                  value={sendAmount}
-                  onChange={(e: any) => setSendAmount(e.target.value)}
-                  asset="AUR"
-                  maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
-                  onSetMax={() => {
-                        const total = parseFloat(ethers.formatUnits(balanceAtom, 18));
-                        const smartMax = total / 1.01;
-                        setSendAmount(smartMax.toFixed(6));
-                  }}
-                />
-                <div className="mt-4 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-2 animate-in fade-in slide-in-from-top-2">
-                   <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-white/40">
-                      <span>Network Fee (1%)</span>
-                      <span className="text-red-400/80">{(parseFloat(sendAmount || "0") * 0.01).toFixed(6)} AUR</span>
-                   </div>
-                   <div className="flex justify-between items-center text-sm font-black uppercase tracking-tight">
-                      <span className="text-white/60">Total Receive</span>
-                      <span className="text-emerald-400">{(parseFloat(sendAmount || "0") * 0.99).toFixed(6)} AUR</span>
-                   </div>
-                </div>
-              </div>
-              <button disabled={isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom)} onClick={handleSend} className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${isSending || !sendAmount || !isValidAddress || (parseFloat(sendAmount) * 1e18) > Number(balanceAtom) ? 'bg-indigo-600/50 text-white/50 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
-                {isSending ? 'Signing & Sending...' : 'Initiate Sovereign Transfer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Stake Modal */}
-      {activeModal === 'stake' && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-          <div className="modal-content overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold flex items-center gap-3">
-                <Lock className="text-emerald-400"/> Sovereign Staking
-              </h2>
-              <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-all"><X size={20}/></button>
-            </div>
-
-            {/* Tab Switcher */}
-            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 mb-8">
-              <button 
-                onClick={() => { setStakingTab('stake'); setStakeAmount(""); }}
-                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${stakingTab === 'stake' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-white/40 hover:text-white'}`}
-              >
-                Stake
-              </button>
-              <button 
-                onClick={() => { setStakingTab('unstake'); setStakeAmount(""); }}
-                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${stakingTab === 'unstake' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white'}`}
-              >
-                Unstake
-              </button>
-            </div>
-            
-            <div className="space-y-6">
-               <div className={`p-4 border rounded-2xl flex gap-4 transition-colors ${stakingTab === 'stake' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-orange-500/5 border-orange-500/20'}`}>
-                 <Shield size={24} className={stakingTab === 'stake' ? 'text-emerald-400' : 'text-orange-400'} />
-                 <p className="text-sm text-white/70">
-                   {stakingTab === 'stake' ? (
-                     <>
-                        <strong className="text-emerald-400 block mb-1">Earn 100% of Daily AUR Protocol Yield</strong>
-                        Lock your Aura into the Sovereign Vault. You can withdraw anytime. Minimum stake is 1 wei.
-                     </>
-                   ) : (
-                     <>
-                        <strong className="text-orange-400 block mb-1">Unlock Sovereign Capital</strong>
-                        Move your AUR from the Sovereign Vault back to your Celestial Treasury. There is zero exit fee.
-                     </>
-                   )}
-                 </p>
-               </div>
-
-              <div>
-                <SovereignInput 
-                  label={stakingTab === 'stake' ? "Amount to Lock" : "Amount to Unlock"}
-                  value={stakeAmount}
-                  onChange={(e: any) => setStakeAmount(e.target.value)}
-                  asset="AUR"
-                  maxAvailable={Number(ethers.formatUnits(stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom, 18)).toFixed(4)}
-                  onSetMax={() => {
-                        const rawAtom = stakingTab === 'stake' ? balanceAtom : stakedBalanceAtom;
-                        setStakeAmount(ethers.formatUnits(rawAtom, 18));
-                  }}
-                  subtext={stakingTab === 'stake' ? "Lock and yield rewards" : "Wait 3 days unbonding period"}
-                />
-              </div>
-              <button 
-                disabled={isStaking || !stakeAmount} 
-                onClick={stakingTab === 'stake' ? handleStake : handleUnstake} 
-                className={`w-full py-5 font-bold rounded-2xl transition-all shadow-lg ${
-                  isStaking || !stakeAmount
-                  ? (stakingTab === 'stake' ? 'bg-emerald-600/50' : 'bg-orange-600/50') + ' text-white/50 cursor-not-allowed' 
-                  : (stakingTab === 'stake' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400') + ' text-white'
-                }`}
-              >
-                {isStaking ? (stakingTab === 'stake' ? 'Locking on Sovereign...' : 'Unlocking...') : (stakingTab === 'stake' ? 'Confirm Sovereign Stake' : 'Confirm Unlock')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
 
 
@@ -1003,6 +774,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   {isCheckingRecipient && <RefreshCw size={14} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-white/20" />}
                   {recipientProfile?.exists && <CheckCircle2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />}
                </div>
+               
+               {isScannerOpen && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="relative bg-black rounded-2xl border border-white/10 overflow-hidden shadow-2xl aspect-square">
+                    <div id="scanner-region" className="w-full h-full" />
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="w-48 h-48 border-2 border-indigo-500/30 rounded-3xl animate-pulse" />
+                    </div>
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                      <button 
+                         onClick={() => setIsScannerOpen(false)}
+                         className="px-6 py-2 bg-red-500/20 backdrop-blur-md rounded-full text-[9px] font-black text-red-400 border border-red-500/20 uppercase tracking-widest"
+                      >
+                         Stop Scanning
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
                {recipientProfile?.nick && (
                  <div className="px-1 text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider">Verified: {recipientProfile.nick}</div>
                )}
@@ -1078,12 +869,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             </div>
 
             <button 
-               onClick={handleStake}
+               onClick={stakingTab === 'stake' ? handleStake : handleUnstake}
                disabled={isStaking || !stakeAmount}
-               className={`w-full py-5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-20 disabled:grayscale text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-emerald-600/20 active:scale-95 flex items-center justify-center gap-3`}
+               className={`w-full py-5 ${stakingTab === 'stake' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20' : 'bg-orange-600 hover:bg-orange-500 shadow-orange-600/20'} disabled:opacity-20 disabled:grayscale text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3`}
             >
-               {isStaking ? <RefreshCw className="animate-spin" size={16}/> : <Lock size={16}/>}
-               {isStaking ? 'Verifying Allocation...' : stakingTab === 'stake' ? 'Activate Stake' : 'Deactivate Stake'}
+               {isStaking ? <RefreshCw className="animate-spin" size={16}/> : (stakingTab === 'stake' ? <Lock size={16}/> : <ArrowDownRight size={16}/>)}
+               {isStaking ? 'Verifying Allocation...' : stakingTab === 'stake' ? 'Activate Stake' : 'Release Stake'}
             </button>
           </div>
         </SovereignModal>
