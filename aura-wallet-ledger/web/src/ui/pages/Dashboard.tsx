@@ -414,7 +414,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return () => clearTimeout(debounceToken);
   }, [recipient, isValidAddress]);
 
-  // Consensus Protocol V2: Strict Pipe-Separated Template
+  // Consensus Protocol V3: Final Synchronized Specification
   const buildConsensusMessage = (op: string, nonce: number, from: string, to: string = "", amount: string = "") => {
     // Standardize all inputs to lowercase and trimmed strings
     const _op = op.toUpperCase();
@@ -422,9 +422,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const _to = (to || "").toLowerCase().trim();
     const _amt = (amount || "").trim();
     
-    // v2 Template: [AURA|V2]|OP|NONCE|FROM|TO|AMOUNT
-    const msg = `[AURA|V2]|${_op}|${nonce}|${_from}|${_to}|${_amt}`;
-    console.log("V2 Signing Payload:", msg);
+    // v3 Template: [AURA|V3]|OP|NONCE|FROM|TO|AMOUNT
+    const msg = `[AURA|V3]|${_op}|${nonce}|${_from}|${_to}|${_amt}`;
+    console.log("V3 Signing Payload:", msg);
     return msg;
   };
 

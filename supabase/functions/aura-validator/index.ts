@@ -40,6 +40,10 @@ serve(async (req) => {
     const msg_v2 = `[AURA|V2]|${v2_op}|${tx.nonce}|${from_address}|${v2_to}|${v2_amt}`
     messageVariants.push(msg_v2)
 
+    // V3 Final Specification (Synchronized with Dashboard.tsx V3 Protocol)
+    const msg_v3 = `[AURA|V3]|${v2_op}|${tx.nonce}|${from_address}|${v2_to}|${v2_amt}`
+    messageVariants.push(msg_v3)
+
     // 2. Multi-Variant Cryptographic Signature Verification
     let verified = false
     let lastMismatch = "RECOVERY_FAILED"
