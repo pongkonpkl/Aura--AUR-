@@ -37,9 +37,12 @@ const SovereignModal = ({ isOpen, onClose, title, children }: any) => {
   );
 };
 
-const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder }: any) => (
+const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder, status }: any) => (
   <div className="space-y-1">
-     {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest px-1">{label}</label>}
+     <div className="flex justify-between items-center px-1 mb-1">
+        {label && <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">{label}</label>}
+        {status}
+     </div>
      <div className="relative group">
        <input 
           type="text"
@@ -276,6 +279,57 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       clearInterval(optimisticInterval);
     };
   }, [wallet, pendingTxs]);
+
+  // 🕵️ Smart Address Verification System (Anti-Loss Protocol)
+  useEffect(() => {
+    if (!recipient || recipient.length < 6) {
+      setRecipientProfile(null);
+      setIsCheckingRecipient(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCheckingRecipient(true);
+      try {
+        const cleanAddr = recipient.toLowerCase().trim();
+        
+        // Exact HEX Match
+        if (cleanAddr.startsWith('0x') && cleanAddr.length === 42) {
+           const { data, error } = await supabase
+             .from('profiles')
+             .select('nickname')
+             .eq('address', cleanAddr)
+             .single();
+           
+           if (data) {
+             setRecipientProfile({ nick: data.nickname, exists: true });
+           } else {
+             setRecipientProfile({ exists: false });
+           }
+        } else if (cleanAddr.length >= 2) {
+           // Nickname Match Search (Smarter Convenience)
+           const { data, error } = await supabase
+             .from('profiles')
+             .select('nickname, address')
+             .ilike('nickname', cleanAddr)
+             .limit(1)
+             .single();
+           
+           if (data) {
+             setRecipientProfile({ nick: data.nickname, exists: true });
+             // Optionally auto-complete? For now just mark exists.
+           } else {
+             setRecipientProfile({ exists: false });
+           }
+        }
+      } catch (e) {
+        console.error("Verification Error:", e);
+      }
+      setIsCheckingRecipient(false);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [recipient]);
 
   // 🕵️ Transaction Status Watcher (The "Short-term Memory" Manager)
   useEffect(() => {
@@ -773,27 +827,56 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         <SovereignModal 
           isOpen={activeModal === 'send'} 
           onClose={() => setActiveModal(null)} 
+          title="Cele          <div className="space-y-8">
+            <div className="space-y-4">
+               <SovereignInput 
+                  label="Recipient Identity"
+                  value={recipient}
+                  onChange={(e: any) => setRecipient(e.target.value)}
+                  placeholder="0x... or Aura Address"
+                  status={
+                    <>
+                      {isCheckingRecipient && (
+        <SovereignModal 
+          isOpen={activeModal === 'send'} 
+          onClose={() => setActiveModal(null)} 
           title="Celestial Transfer"
         >
           <div className="space-y-8">
             <div className="space-y-4">
-               <div className="flex justify-between items-center px-1">
-                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Recipient Identity</label>
-                  <button onClick={() => setIsScannerOpen(!isScannerOpen)} className="p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg hover:bg-indigo-500/20 transition-all">
-                     <Scan size={14} />
-                  </button>
-               </div>
+               <SovereignInput 
+                  label="Recipient Identity"
+                  value={recipient}
+                  onChange={(e: any) => setRecipient(e.target.value)}
+                  placeholder="0x... or Aura Address"
+                  status={
+                    <>
+                      {isCheckingRecipient && (
+                        <span className="flex items-center gap-1.5 text-[8px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
+                          Searching Ledger...
+                        </span>
+                      )}
+                      {recipientProfile?.exists && (
+                        <span className="flex items-center gap-1.5 text-[8px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 size={10} /> Verified AUR
+                        </span>
+                      )}
+                      {recipientProfile?.exists === false && recipient.length > 5 && (
+                        <span className="flex items-center gap-1.5 text-[8px] font-black text-amber-500 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded-md">
+                          <AlertCircle size={10} /> Not Registered
+                        </span>
+                      )}
+                    </>
+                  }
+               />
                
-               <div className="relative">
-                  <input 
-                    type="text"
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="0x... or Aura Address"
-                    className="w-full bg-[#111] border border-white/5 rounded-2xl p-4 text-sm font-mono text-white placeholder-white/10 focus:border-indigo-500/30 outline-none transition-all"
-                  />
-                  {isCheckingRecipient && <RefreshCw size={14} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-white/20" />}
-                  {recipientProfile?.exists && <CheckCircle2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400" />}
+               <div className="flex justify-center -mt-2">
+                  <button 
+                     onClick={() => setIsScannerOpen(!isScannerOpen)} 
+                     className="px-4 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full hover:bg-indigo-500/20 transition-all flex items-center gap-2 text-[9px] font-black uppercase tracking-widest border border-indigo-500/10"
+                  >
+                     <Scan size={14} /> {isScannerOpen ? 'Close Lens' : 'Scan Aura QR'}
+                  </button>
                </div>
                
                {isScannerOpen && (
@@ -803,20 +886,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className="w-48 h-48 border-2 border-indigo-500/30 rounded-3xl animate-pulse" />
                     </div>
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-                      <button 
-                         onClick={() => setIsScannerOpen(false)}
-                         className="px-6 py-2 bg-red-500/20 backdrop-blur-md rounded-full text-[9px] font-black text-red-400 border border-red-500/20 uppercase tracking-widest"
-                      >
-                         Stop Scanning
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
 
                {recipientProfile?.nick && (
-                 <div className="px-1 text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider">Verified: {recipientProfile.nick}</div>
+                 <div className="px-1 text-[10px] text-emerald-400/80 font-bold uppercase tracking-wider text-center">Identity Found: {recipientProfile.nick}</div>
                )}
             </div>
 
@@ -834,6 +909,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                }}
             />
 
+
             <div className="p-6 bg-indigo-500/[0.02] border border-white/5 rounded-3xl space-y-3">
                <div className="flex justify-between items-center text-[10px] font-black">
                   <span className="text-white/20 uppercase tracking-widest">Network Fee</span>
@@ -847,11 +923,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
             <button 
                onClick={handleSend}
-               disabled={isSending || !isValidAddress || !sendAmount}
+               disabled={isSending || !isValidAddress || !sendAmount || (recipient.startsWith('0x') && recipientProfile?.exists === false)}
                className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 disabled:grayscale text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center justify-center gap-3"
             >
                {isSending ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>}
-               {isSending ? 'Initializing Propagation...' : 'Confirm Broadcast'}
+               {!recipientProfile && recipient.length > 5 ? 'Identifying...' : 
+                (recipientProfile?.exists === false ? 'Registered Only' : 
+                (isSending ? 'Initializing Propagation...' : 'Confirm Broadcast'))}
             </button>
           </div>
         </SovereignModal>
