@@ -20,30 +20,47 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ""
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 1. Reconstruct the message based on the operation (Synchronized with Dashboard.tsx)
-    const prefix = "[Aura Sovereign v1] "
-    let message = ""
+    // 1. Reconstruct message variants (Synchronized with Dashboard.tsx V2 Protocol)
+    const messageVariants: string[] = []
+    
+    // V1 Legacy Template
+    const prefixV1 = "[Aura Sovereign v1] "
     if (op === 'transfer') {
-      message = `${prefix}AUR_TX:${tx.nonce}:${from_address}:${tx.to_address.toLowerCase()}:${tx.amount_atom}`
+      messageVariants.push(`${prefixV1}AUR_TX:${tx.nonce}:${from_address}:${tx.to_address.toLowerCase()}:${tx.amount_atom}`)
     } else if (op === 'stake') {
-      message = `${prefix}AUR_STAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
+      messageVariants.push(`${prefixV1}AUR_STAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`)
     } else if (op === 'unstake') {
-      message = `${prefix}AUR_UNSTAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`
-    } else {
-      await updateStatus(supabase, tx_hash_id, 'failed', `ERR_004: Invalid Op: ${op}`)
-      return new Response("Invalid Operation", { status: 400 })
+      messageVariants.push(`${prefixV1}AUR_UNSTAKE:${tx.nonce}:${from_address}:${tx.amount_atom}`)
     }
 
-    // 2. Cryptographic Signature Verification
-    try {
-      const recoveredAddress = ethers.verifyMessage(message, signature).toLowerCase()
-      if (recoveredAddress !== from_address) {
-        await updateStatus(supabase, tx_hash_id, 'failed', `ERR_001: Signature mismatch. Recovered: ${recoveredAddress}`)
-        return new Response("Unauthorized", { status: 401 })
+    // V2 Canonical Protocol (Pipe-Separated Strict Formatting)
+    const v2_op = op.toUpperCase()
+    const v2_to = op === 'transfer' ? (tx.to_address || "").toLowerCase().trim() : ""
+    const v2_amt = (op !== 'claim' && tx.amount_atom) ? String(tx.amount_atom).trim() : ""
+    const msg_v2 = `[AURA|V2]|${v2_op}|${tx.nonce}|${from_address}|${v2_to}|${v2_amt}`
+    messageVariants.push(msg_v2)
+
+    // 2. Multi-Variant Cryptographic Signature Verification
+    let verified = false
+    let recoveredAddress = "RECOVERY_FAILED"
+    
+    for (const msg of messageVariants) {
+      try {
+        const recovered = ethers.verifyMessage(msg, signature).toLowerCase()
+        if (recovered === from_address) {
+          verified = true
+          break
+        }
+        recoveredAddress = recovered // Store last mismatch for diagnostic log
+      } catch (e) {
+        console.error(`Verification Error for variant: ${msg}`, e)
       }
-    } catch (e) {
-      await updateStatus(supabase, tx_hash_id, 'failed', `ERR_001: Sig Error: ${e.message}`)
-      return new Response("Signature verification failed", { status: 401 })
+    }
+
+    if (!verified) {
+      const log = `ERR_001: Signature mismatch. Recovered: ${recoveredAddress}. Expected: ${from_address}. Variants tried: ${messageVariants.length}`
+      await updateStatus(supabase, tx_hash_id, 'failed', log)
+      return new Response("Unauthorized", { status: 401 })
     }
 
     // 3. Atomic Settlement via RPC
