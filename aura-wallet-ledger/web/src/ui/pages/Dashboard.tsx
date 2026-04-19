@@ -423,7 +423,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const _amt = (amount || "").trim();
     
     // v2 Template: [AURA|V2]|OP|NONCE|FROM|TO|AMOUNT
-    return `[AURA|V2]|${_op}|${nonce}|${_from}|${_to}|${_amt}`;
+    const msg = `[AURA|V2]|${_op}|${nonce}|${_from}|${_to}|${_amt}`;
+    console.log("V2 Signing Payload:", msg);
+    return msg;
   };
 
   const fetchNonce = async (address: string): Promise<number> => {
@@ -872,6 +874,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                           catch { return "0.00"; }
                         })()}
                       </p>
+                      <a 
+                        href={`https://supabase.com/dashboard/project/_/editor/table/transactions?filter=tx_hash%3Deq%3D${tx.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-400/50 hover:text-indigo-400 uppercase tracking-widest transition-all"
+                      >
+                        <ExternalLink size={10} /> Verify on Ledger
+                      </a>
                     </div>
                   </div>
                 );
