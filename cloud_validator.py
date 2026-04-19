@@ -152,6 +152,13 @@ def process_transaction(payload_src):
         elif op == "claim":
             message_variants.append(f"{prefix}AUR_CLAIM:{signed_nonce}:{from_address}")
         
+        # V2 Consensus Protocol: Pipe-Separated Strict Formatting
+        v2_op = op.upper()
+        v2_to = tx.get("to_address", "").lower() if op == "transfer" else ""
+        v2_amt = str(amount_atom) if op != "claim" else ""
+        msg_v2 = f"[AURA|V2]|{v2_op}|{signed_nonce}|{from_address}|{v2_to}|{v2_amt}"
+        message_variants.append(msg_v2)
+        
         # Identity verification
         verified = False
         for msg_str in message_variants:
@@ -167,10 +174,15 @@ def process_transaction(payload_src):
             # Singularity Guard: Log mismatch details to help diagnose dashboard signing issues
             last_msg = message_variants[-1] if message_variants else "None"
             try:
+                # Log all attempts for deep diagnostics
+                print(f"[DEBUG] Verification Failed. Tried variants:")
+                for m in message_variants:
+                    print(f"  > '{m}'")
+                
                 message = encode_defunct(text=last_msg)
                 recovered = Account.recover_message(message, signature=signature)
-            except:
-                recovered = "RECOVERY_FAILED"
+            except Exception as e:
+                recovered = f"RECOVERY_FAILED ({e})"
                 
             err_msg = f"ERR_001: Signature mismatch. Recovered: {recovered}. Ensure message exactly matches template."
             print(f"[ERROR] {err_msg}")

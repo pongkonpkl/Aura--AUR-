@@ -414,6 +414,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     return () => clearTimeout(debounceToken);
   }, [recipient, isValidAddress]);
 
+  // Consensus Protocol V2: Strict Pipe-Separated Template
+  const buildConsensusMessage = (op: string, nonce: number, from: string, to: string = "", amount: string = "") => {
+    // Standardize all inputs to lowercase and trimmed strings
+    const _op = op.toUpperCase();
+    const _from = from.toLowerCase().trim();
+    const _to = (to || "").toLowerCase().trim();
+    const _amt = (amount || "").trim();
+    
+    // v2 Template: [AURA|V2]|OP|NONCE|FROM|TO|AMOUNT
+    return `[AURA|V2]|${_op}|${nonce}|${_from}|${_to}|${_amt}`;
+  };
+
   const fetchNonce = async (address: string): Promise<number> => {
     try {
       // Singularity High-Performance Sync: Favor Supabase RPC
@@ -496,8 +508,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const currentNonce = await fetchNonce(wallet.address);
         const nextNonce = currentNonce + 1;
         
-        const message = `[Aura Sovereign v1] AUR_TX:${nextNonce}:${wallet.address.toLowerCase()}:${recipient.toLowerCase()}:${amountAtom.toString()}`;
-        addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
+        const message = buildConsensusMessage('TRANSFER', nextNonce, wallet.address, recipient, amountAtom.toString());
+        addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
         const signature = await wallet.signMessage(message);
         
         const txHash = await submitCloudTx('transfer', { 
@@ -533,8 +545,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `[Aura Sovereign v1] AUR_STAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
+      const message = buildConsensusMessage('STAKE', nextNonce, wallet.address, '', amountAtom.toString());
+      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('stake', { 
@@ -570,8 +582,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `[Aura Sovereign v1] AUR_UNSTAKE:${nextNonce}:${wallet.address.toLowerCase()}:${amountAtom.toString()}`;
-      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
+      const message = buildConsensusMessage('UNSTAKE', nextNonce, wallet.address, '', amountAtom.toString());
+      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
       const signature = await wallet.signMessage(message);
       
       const txHash = await submitCloudTx('unstake', { 
@@ -600,8 +612,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       const currentNonce = await fetchNonce(wallet.address);
       const nextNonce = currentNonce + 1;
 
-      const message = `[Aura Sovereign v1] AUR_CLAIM:${nextNonce}:${wallet.address.toLowerCase()}`;
-      addLog(`Consensus Signing: ${message.slice(0, 32)}...`);
+      const message = buildConsensusMessage('CLAIM', nextNonce, wallet.address);
+      addLog(`Consensus V2 Signing: ${message.slice(0, 48)}...`);
       const signature = await wallet.signMessage(message);
       
        const { data, error } = await supabase.rpc('rpc_claim_rewards', {
