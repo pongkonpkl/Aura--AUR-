@@ -450,22 +450,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const tx_hash = signature.startsWith('0x') ? ethers.keccak256(signature) : `queued-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     // Insert into Supabase Transaction Queue
-    const { error } = await supabase
-      .from('transactions')
-      .insert({
-        tx_hash,
-        from_address: wallet.address.toLowerCase(),
-        to_address: tx.to_address?.toLowerCase() || 'System',
-        amount: tx.amount_atom || "0",
-        tx_type: op,
-        signature,
-        status: 'pending',
-        payload: { op, tx, signature } // For Validator pick-up
-      });
+    try {
+        const { error } = await supabase
+          .from('transactions')
+          .insert({
+            tx_hash,
+            from_address: wallet.address.toLowerCase(),
+            to_address: tx.to_address?.toLowerCase() || 'System',
+            amount: tx.amount_atom || "0",
+            tx_type: op,
+            signature,
+            status: 'pending',
+            payload: { op, tx, signature } // For Validator pick-up
+          });
 
-    if (error) throw new Error(`Queue Failure: ${error.message}`);
-    addLog(`Transaction queued for Cloud Settlement. Hash: ${tx_hash.slice(0,12)}...`);
-    return tx_hash;
+        if (error) {
+            // Handle Postgres Unique Constraint Violation (23505)
+            if (error.code === '23505') {
+                addLog(`Transaction already propagating: ${tx_hash.slice(0,12)}...`);
+                return tx_hash;
+            }
+            throw new Error(`Queue Failure: ${error.message}`);
+        }
+        
+        addLog(`Transaction queued for Cloud Settlement. Hash: ${tx_hash.slice(0,12)}...`);
+        return tx_hash;
+    } catch (e: any) {
+        if (e.message?.includes('duplicate key')) {
+             addLog(`Transaction already propagating: ${tx_hash.slice(0,12)}...`);
+             return tx_hash;
+        }
+        throw e;
+    }
   };
 
 
