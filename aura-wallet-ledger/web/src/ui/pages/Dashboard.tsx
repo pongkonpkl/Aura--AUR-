@@ -63,7 +63,7 @@ const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax,
 const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet }) => {
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [networkStats, setNetworkStats] = useState({ activeNodes: 0, sharedPool: '0.00' });
-  const [activeModal, setActiveModal] = useState<'send' | 'stake' | null>(null);
+  const [activeModal, setActiveModal] = useState<'send' | 'stake' | 'address' | null>(null);
   const [balanceAtom, setBalanceAtom] = useState<string>("0");
   const [stakedBalanceAtom, setStakedBalanceAtom] = useState<string>("0");
   const [recipient, setRecipient] = useState("");
@@ -262,12 +262,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
     const syncInterval = setInterval(syncWithSupabase, 15000);
     const heartbeatInterval = setInterval(heartbeat, 60000);
 
-    // 📈 Optimistic Reward Counter (Real-time Feedback)
+    // 📈 Smart Calibration: Sync Tick to exactly match Daily Emission
     const optimisticInterval = setInterval(() => {
-        // Smoother pulse: increment every 100ms
-        // Original: 0.0001 (10^14) per 10s
-        // New: 0.000001 (10^12) per 100ms
-        setOptimisticReward(prev => prev + 1000000000000n); 
+        // Calculation: 1 AUR / 864,000 intervals (100ms) = ~1.157 * 10^12 atoms
+        // This ensures the UI counter stays perfectly in sync with the Cloud Validator.
+        const emissionPer100ms = BigInt(dailyEmission) / 864000n;
+        setOptimisticReward(prev => prev + (emissionPer100ms > 0n ? emissionPer100ms : 1000000000000n)); 
     }, 100);
 
     return () => {
@@ -554,7 +554,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]" />
                   Presence Active
                 </span>
-                <span className="text-xs text-white/40 uppercase tracking-tighter">Identity: {wallet.address.slice(0,6)}...{wallet.address.slice(-4)}</span>
+                <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
+                  navigator.clipboard.writeText(wallet.address);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 2000);
+                  addLog("Address copied to clipboard.");
+                }}>
+                  <span className="text-xs text-white/40 uppercase tracking-tighter hover:text-white transition-all">
+                    Identity: {wallet.address.slice(0,6)}...{wallet.address.slice(-4)}
+                  </span>
+                  {isCopied ? <CheckCircle2 size={10} className="text-emerald-400" /> : <Copy size={10} className="text-white/20 group-hover:text-white/40" />}
+                </div>
+                <button 
+                  onClick={() => setActiveModal('address')}
+                  className="p-1.5 hover:bg-white/5 rounded-md text-white/20 hover:text-white transition-all ml-1"
+                  title="Show QR Code"
+                >
+                  <Scan size={12} />
+                </button>
+
               </div>
             </div>
           </div>
@@ -608,8 +626,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                 <p className="text-[11px] text-purple-400/60 font-bold uppercase tracking-widest">Liquid Balance (Available to Spend)</p>
               </div>
               
-              <div className="flex gap-3 shrink-0">
-                <button onClick={() => setActiveModal('send')} className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[11px] font-black uppercase transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center gap-2">
+              <div className="flex gap-3 shrink-0 relative z-50">
+                <button 
+                  onClick={() => setActiveModal('send')} 
+                  className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[11px] font-black uppercase transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center gap-2 cursor-pointer pointer-events-auto"
+                >
                    <ArrowUpRight size={14} /> Send
                 </button>
               </div>
@@ -636,32 +657,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                  Compounding Active
               </div>
             </div>
-            <button onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} className="w-full py-3 bg-[#111] hover:bg-[#1a1a1a] text-emerald-400 rounded-xl font-black text-[9px] uppercase border border-white/5 transition-all">Manage Vault</button>
+             <button onClick={() => { setStakingTab('stake'); setActiveModal('stake'); }} className="w-full py-3 bg-[#111] hover:bg-[#1a1a1a] text-emerald-400 rounded-xl font-black text-[9px] uppercase border border-white/5 transition-all relative z-50 cursor-pointer">Manage Vault</button>
           </div>
 
           {/* Reward Accrual */}
-          <div className="lg:col-span-2 glass-panel p-6 rounded-3xl relative overflow-hidden group border border-amber-500/20">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-3xl rounded-full" />
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                <Zap size={20} className="animate-pulse" />
-              </div>
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Reward Accrual</span>
-              <span className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-black font-black rounded uppercase">AUR Protocol</span>
-            </div>
-            <div className="space-y-0.5 mb-4">
-              <p className="text-3xl font-bold tracking-tighter text-amber-500 leading-none">
-                {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}<span className="text-xs opacity-40"> AUR</span>
-              </p>
-              <p className="text-[9px] text-white/20 font-bold uppercase tracking-widest mt-1">Live cloud mining from presence</p>
-            </div>
-            <button 
-              disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
-              onClick={handleClaim}
-              className="w-full py-3 bg-amber-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-amber-400 transition-all disabled:opacity-20"
-            >
-              Claim Sovereign Rewards
-            </button>
+            <div className="lg:col-span-2 glass-panel p-6 rounded-3xl relative overflow-hidden group border border-amber-500/20">
+             <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-3xl rounded-full" />
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                 <Zap size={20} className="animate-pulse" />
+               </div>
+               <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Reward Accrual</span>
+               <span className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-black font-black rounded uppercase">AUR Protocol</span>
+             </div>
+             <div className="space-y-0.5 mb-4">
+               <p className="text-3xl font-bold tracking-tighter text-amber-500 leading-none">
+                 {parseFloat(ethers.formatUnits(BigInt(pendingRewardAtom) + optimisticReward, 18)).toFixed(4)}<span className="text-xs opacity-40"> AUR</span>
+               </p>
+               <p className="text-[9px] text-white/20 font-bold uppercase tracking-widest mt-1">Live cloud mining from presence</p>
+             </div>
+             <button 
+               disabled={isClaiming || (BigInt(pendingRewardAtom) + optimisticReward) <= 0n}
+               onClick={handleClaim}
+               className="w-full py-3 bg-amber-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-amber-400 transition-all disabled:opacity-20 relative z-50 cursor-pointer"
+             >
+               Claim Sovereign Rewards
+             </button>
           </div>
 
           {/* Peer Telemetry Stream - Moved here for Balance (60% width) */}
@@ -805,7 +826,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                onChange={(e: any) => setSendAmount(e.target.value)}
                asset="AUR"
                maxAvailable={Number(ethers.formatUnits(balanceAtom, 18)).toFixed(4)}
-               onSetMax={() => setSendAmount(ethers.formatUnits(balanceAtom, 18))}
+               onSetMax={() => {
+                  // Smart Max: Subtract 1% for the network burn to prevent "Insufficient Balance" errors
+                  const total = Number(ethers.formatUnits(balanceAtom, 18));
+                  const smartMax = (total / 1.01).toFixed(6);
+                  setSendAmount(smartMax);
+               }}
             />
 
             <div className="p-6 bg-indigo-500/[0.02] border border-white/5 rounded-3xl space-y-3">
@@ -827,6 +853,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                {isSending ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>}
                {isSending ? 'Initializing Propagation...' : 'Confirm Broadcast'}
             </button>
+          </div>
+        </SovereignModal>
+
+        <SovereignModal 
+          isOpen={activeModal === 'address'} 
+          onClose={() => setActiveModal(null)} 
+          title="Presence Identity"
+        >
+          <div className="flex flex-col items-center space-y-8 py-4">
+            <div className="p-4 bg-white rounded-[2rem] shadow-[0_0_50px_rgba(255,255,255,0.1)]">
+              <QRCodeSVG value={wallet.address} size={200} level="H" includeMargin={true} />
+            </div>
+            
+            <div className="w-full space-y-3">
+              <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-2 text-center">Standard Hex Identity</p>
+              <div 
+                onClick={() => {
+                  navigator.clipboard.writeText(wallet.address);
+                  addLog("Full address copied.");
+                }}
+                className="w-full bg-[#111] border border-white/5 rounded-2xl p-5 break-all font-mono text-xs text-indigo-300 relative group cursor-pointer hover:border-indigo-500/30 transition-all text-center"
+              >
+                {wallet.address}
+                <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-all rounded-2xl flex items-center justify-center">
+                  <span className="bg-indigo-600 text-[9px] font-black text-white px-3 py-1 rounded-full uppercase tracking-widest shadow-xl">Copy Identity</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-white/20 font-bold text-center italic">
+              "Your identity is your sovereignty. share it with care."
+            </p>
           </div>
         </SovereignModal>
 
@@ -863,7 +921,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                   </div>
                   <div>
                      <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Global Protocol Yield</p>
-                     <p className="text-[9px] text-white/30 font-bold uppercase tracking-tighter mt-1">+1.0 AUR shared daily across the fleet</p>
+                     <p className="text-[9px] text-white/30 font-bold uppercase tracking-tighter mt-1">Est. Daily Reward: {((Number(ethers.formatUnits(stakedBalanceAtom, 18)) / (Number(ethers.formatUnits(totalEmission, 18)) || 1)) * Number(ethers.formatUnits(dailyEmission, 18))).toFixed(6)} AUR</p>
                   </div>
                </div>
             </div>
