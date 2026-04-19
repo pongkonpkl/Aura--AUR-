@@ -859,34 +859,72 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         <SovereignModal 
           isOpen={activeModal === 'address'} 
           onClose={() => setActiveModal(null)} 
-          title="Presence Identity"
+          title="Digital Sovereignty Card"
         >
-          <div className="flex flex-col items-center space-y-8 py-4">
-            <div className="p-4 bg-white rounded-[2rem] shadow-[0_0_50px_rgba(255,255,255,0.1)]">
-              <QRCodeSVG value={wallet.address} size={200} level="H" includeMargin={true} />
+          <div className="flex flex-col items-center space-y-8 py-4 relative">
+            {/* Status Pulse */}
+            <div className="absolute top-0 right-0 flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
+               <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Network Verified</span>
+            </div>
+
+            {/* Premium QR Display */}
+            <div className="relative group">
+               <div className="absolute -inset-4 bg-gradient-to-tr from-indigo-500/20 to-purple-600/20 blur-2xl opacity-50 group-hover:opacity-100 transition-all duration-700" />
+               <div className="relative p-6 bg-white/[0.03] backdrop-blur-3xl rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden">
+                  <div className="p-3 bg-white rounded-[1.8rem]">
+                    <QRCodeSVG 
+                      value={wallet.address} 
+                      size={180} 
+                      level="H" 
+                      includeMargin={false}
+                      imageSettings={{
+                         src: "https://i.ibb.co/vz6mD8y/aura-logo-mini.png", 
+                         x: undefined, 
+                         y: undefined, 
+                         height: 24, 
+                         width: 24, 
+                         excavate: true,
+                      }}
+                    />
+                  </div>
+               </div>
             </div>
             
-            <div className="w-full space-y-3">
-              <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-2 text-center">Standard Hex Identity</p>
-              <div 
-                onClick={() => {
-                  navigator.clipboard.writeText(wallet.address);
-                  addLog("Full address copied.");
-                }}
-                className="w-full bg-[#111] border border-white/5 rounded-2xl p-5 break-all font-mono text-xs text-indigo-300 relative group cursor-pointer hover:border-indigo-500/30 transition-all text-center"
-              >
-                {wallet.address}
-                <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-all rounded-2xl flex items-center justify-center">
-                  <span className="bg-indigo-600 text-[9px] font-black text-white px-3 py-1 rounded-full uppercase tracking-widest shadow-xl">Copy Identity</span>
-                </div>
+            <div className="w-full space-y-4">
+              <div className="flex justify-between items-center px-2">
+                 <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Sovereign Hex Address</p>
+                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md">L1 Native</span>
+              </div>
+              
+              <div className="relative group overflow-hidden bg-[#0c0c14] border border-white/5 rounded-3xl p-6 transition-all hover:border-indigo-500/30">
+                <p className="font-mono text-[11px] text-indigo-100/90 break-all leading-relaxed text-center">
+                  {wallet.address}
+                </p>
+                
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(wallet.address);
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                  }}
+                  className="mt-6 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                  {isCopied ? 'Identity Copied' : 'Copy Identity'}
+                </button>
               </div>
             </div>
 
-            <p className="text-[10px] text-white/20 font-bold text-center italic">
-              "Your identity is your sovereignty. share it with care."
-            </p>
+            <div className="flex items-center gap-3 px-6 py-3 bg-white/[0.02] rounded-2xl border border-white/5 max-w-[80%]">
+               <Shield size={16} className="text-indigo-400 shrink-0" />
+               <p className="text-[9px] text-white/40 font-medium leading-relaxed italic text-center">
+                 Your identity is established on the AURA Sovereign Ledger. Share this hex to receive assets.
+               </p>
+            </div>
           </div>
         </SovereignModal>
+
 
         <SovereignModal 
           isOpen={activeModal === 'stake'} 
