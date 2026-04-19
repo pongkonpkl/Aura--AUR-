@@ -42,7 +42,8 @@ serve(async (req) => {
 
     // 2. Multi-Variant Cryptographic Signature Verification
     let verified = false
-    let recoveredAddress = "RECOVERY_FAILED"
+    let lastMismatch = "RECOVERY_FAILED"
+    let diagnosticMsg = ""
     
     for (const msg of messageVariants) {
       try {
@@ -51,14 +52,15 @@ serve(async (req) => {
           verified = true
           break
         }
-        recoveredAddress = recovered // Store last mismatch for diagnostic log
+        lastMismatch = recovered
+        diagnosticMsg = msg // Capture the last attempted message for auditing
       } catch (e) {
         console.error(`Verification Error for variant: ${msg}`, e)
       }
     }
 
     if (!verified) {
-      const log = `ERR_001: Signature mismatch. Recovered: ${recoveredAddress}. Expected: ${from_address}. Variants tried: ${messageVariants.length}`
+      const log = `ERR_001: Signature mismatch. Recovered: ${lastMismatch}. Expected: ${from_address}. MSG_AT_FAIL: [${diagnosticMsg}]`
       await updateStatus(supabase, tx_hash_id, 'failed', log)
       return new Response("Unauthorized", { status: 401 })
     }
