@@ -84,8 +84,9 @@ def process_transaction(payload_src):
         print(f"[ERROR] Malformed transaction record: {payload_src}")
         return False
 
-    tx_hash_id = data.get("tx_hash") # From DB (Supabase Row)
-    print(f"[INFO] Processing TX: {tx_hash_id}")
+    tx_hash_id = data.get("tx_hash") # Human readable hash/tag
+    db_id = data.get("id") # The UUID primary key
+    print(f"[INFO] Processing TX Hash: {tx_hash_id} (ID: {db_id})")
 
     op = data.get("op")
     tx = data.get("tx")
@@ -163,8 +164,17 @@ def process_transaction(payload_src):
             except: continue
             
         if not verified:
-            print("[ERROR] Invalid digital signature (Checked all variants)")
-            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", "Invalid signature")
+            # Singularity Guard: Log mismatch details to help diagnose dashboard signing issues
+            last_msg = message_variants[-1] if message_variants else "None"
+            try:
+                message = encode_defunct(text=last_msg)
+                recovered = Account.recover_message(message, signature=signature)
+            except:
+                recovered = "RECOVERY_FAILED"
+                
+            err_msg = f"ERR_001: Signature mismatch. Recovered: {recovered}. Ensure message exactly matches template."
+            print(f"[ERROR] {err_msg}")
+            if tx_hash_id: update_transaction_status(tx_hash_id, "failed", err_msg)
             return False
             
     except Exception as e:
@@ -182,7 +192,7 @@ def process_transaction(payload_src):
             rpc_payload = {
                 "p_from_address": from_address, "p_to_address": to_address,
                 "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
-                "p_tx_hash_id": tx_hash_id
+                "p_tx_hash_id": db_id or tx_hash_id # Use UUID if available to avoid cast errors
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
             
@@ -190,14 +200,14 @@ def process_transaction(payload_src):
             rpc_payload = {
                 "p_op": op, "p_address": from_address,
                 "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
-                "p_tx_hash_id": tx_hash_id
+                "p_tx_hash_id": db_id or tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
 
         elif op == "withdraw":
             rpc_payload = {
                 "p_address": from_address, "p_amount_atom": amount_atom,
-                "p_nonce": signed_nonce or expected_nonce, "p_tx_hash_id": tx_hash_id
+                "p_nonce": signed_nonce or expected_nonce, "p_tx_hash_id": db_id or tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_withdrawal", headers=headers, json=rpc_payload)
         
@@ -205,7 +215,7 @@ def process_transaction(payload_src):
             rpc_payload = {
                 "p_user_address": from_address, "p_amount_aur_atom": amount_atom,
                 "p_target_asset": tx.get("target", "NATIVE"),
-                "p_nonce": signed_nonce or expected_nonce, "p_tx_id": tx_hash_id
+                "p_nonce": signed_nonce or expected_nonce, "p_tx_id": db_id or tx_hash_id
             }
             resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_swap", headers=headers, json=rpc_payload)
         

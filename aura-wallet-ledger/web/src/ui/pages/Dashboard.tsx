@@ -323,28 +323,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
 
   const fetchNonce = async (address: string): Promise<number> => {
     try {
-      // Security Hardening: Prioritize Sharded Shard-aware Nonce
+      // Singularity High-Performance Sync: Favor Supabase RPC
       const { data } = await supabase.rpc('rpc_get_profile', {
           p_user_address: address.toLowerCase()
       });
       
       const profile = Array.isArray(data) ? data[0] : data;
-      
-      if (profile && profile.last_nonce !== undefined) {
-        return Number(profile.last_nonce);
-      }
-
-      // Fallback: This is legacy logic for transition
-      const resp = await fetch(`${LOCAL_ENGINE_URL}/nonce?address=${address}`);
-      const fallbackData = await resp.json(); 
-      return fallbackData.nonce;
+      const nonce = profile ? Number(profile.last_nonce || 0) : 0;
+      addLog(`Nonce Sync: ${nonce}`);
+      return nonce;
     } catch (e) {
-      // Deep Fallback: Cloud Ledger JSON
+      // Authoritative Deep Fallback: Cloud Ledger JSON
       try {
-        const res = await fetch(`${REPO_RAW_BASE}/ledger.json`);
+        const res = await fetch(`${REPO_RAW_BASE}/ledger.json?t=${Date.now()}`);
         const ledger = await res.json();
-        return parseInt((ledger.nonces || {})[address] || "0");
-      } catch (err) {
+        const nonce = Number(ledger.nonces?.[address.toLowerCase()] || 0);
+        addLog(`Deep Nonce Sync: ${nonce}`);
+        return nonce;
+      } catch (inner) {
         addLog("Critical: Nonce retrieval failed. Check connection.");
         return 0;
       }
