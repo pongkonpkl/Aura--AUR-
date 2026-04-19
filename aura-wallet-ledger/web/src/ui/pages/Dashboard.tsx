@@ -37,16 +37,21 @@ const SovereignModal = ({ isOpen, onClose, title, children }: any) => {
   );
 };
 
-const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder, status }: any) => {
+const SovereignInput = ({ label, value, onChange, asset, maxAvailable, onSetMax, subtext, placeholder, status, type = "amount" }: any) => {
   const handleChange = (e: any) => {
     let val = e.target.value;
-    // 🕵️ Smart Filtering: Auto-fix 'o' typos and block non-numeric
-    val = val.replace(/[oO]/g, '0'); // Fix o -> 0
-    val = val.replace(/[^0-9.]/g, ''); // Numeric and dot only
     
-    // Prevent multiple dots
-    const dots = val.split('.').length - 1;
-    if (dots > 1) return; 
+    // 🕵️ Smart Filtering based on Input Type
+    val = val.replace(/[oO]/g, '0'); // Fix o -> 0 globally (helpful for both)
+
+    if (type === "amount") {
+      val = val.replace(/[^0-9.]/g, ''); // Numeric and dot only for amounts
+      // Prevent multiple dots
+      const dots = val.split('.').length - 1;
+      if (dots > 1) return; 
+    } else if (type === "address") {
+      val = val.replace(/[^0-9a-fA-Fx]/g, ''); // Allow Hex characters and 'x' for addresses
+    }
 
     onChange({ target: { value: val } });
   };
@@ -861,6 +866,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             <div className="space-y-4">
                <SovereignInput 
                   label="Recipient Identity"
+                  type="address"
                   value={recipient}
                   onChange={(e: any) => setRecipient(e.target.value)}
                   placeholder="0x... or Aura Address"
