@@ -187,6 +187,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
         const serverProfile = Array.isArray(profile) ? profile[0] : profile;
 
         if (serverProfile) {
+          const currentPending = pendingTxsRef.current;
+          const serverBalance = BigInt(serverProfile.balance_atom || "0");
+          const serverStaked = BigInt(serverProfile.staked_balance_atom || "0");
+          
+          const pendingStake = currentPending.filter(t => t.type === 'stake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
+          const pendingUnstake = currentPending.filter(t => t.type === 'unstake').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
           const pendingOut = currentPending.filter(t => t.type === 'transfer').reduce((acc, t) => acc + BigInt(t.amount || "0"), 0n);
 
           // Adjusted view for the user (With Safety Lock to prevent Negative Balances)
