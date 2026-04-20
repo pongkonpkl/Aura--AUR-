@@ -1,25 +1,33 @@
--- 🛡️ Aura Sovereign: Smart Global Statistics Protocol
--- Version: 1.1.1
--- Description: Implement atomic stats synchronization for Total Supply and Daily Pulse.
--- This script safely updates the live system to enable "Smart Stats".
+-- 🛡️ Aura Sovereign: Hardened Mining & Stats Protocol
+-- Version: 1.2.0
+-- Description: Implement Replay Protection, Access Control, and Atomic Global Stats.
+-- This script provides a comprehensive security hardening for the live system.
 
--- 0. Cleanup to prevent return type mismatch errors
+-- 0. Cleanup existing functions
 DROP FUNCTION IF EXISTS rpc_recalculate_global_stats();
+DROP FUNCTION IF EXISTS rpc_submit_mining_share(text, uuid, text, text);
+DROP FUNCTION IF EXISTS rpc_settle_mining_rewards();
 
--- 1. Helper: Recalculate Global Stats
--- Sums all balances (Liquid + Staked) to provide a 100% accurate Total Supply.
+-- 1. Security Infrastructure: Nonce Deduplication
+-- This table prevents the same PoW solution from being submitted multiple times.
+CREATE TABLE IF NOT EXISTS sovereign_mining_nonces (
+    job_id UUID REFERENCES sovereign_mining_jobs(id),
+    nonce TEXT,
+    submitted_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (job_id, nonce)
+);
+
+-- 2. Helper: Recalculate Global Stats (Atomic Accuracy)
 CREATE OR REPLACE FUNCTION rpc_recalculate_global_stats()
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
     v_total_supply NUMERIC;
-    v_daily_target NUMERIC := 2000000000000000000; -- 2.0 AUR (Hybrid: 1.0 Staking + 1.0 Mining)
+    v_daily_target NUMERIC := 2000000000000000000; -- 2.0 AUR (Hybrid Protocol)
 BEGIN
-    -- Sum all balances across all shards
     SELECT COALESCE(SUM(balance_atom::NUMERIC + staked_balance_atom::NUMERIC), 0)
     INTO v_total_supply
     FROM profiles;
 
-    -- Update Global Stats Table
     UPDATE sovereign_stats
     SET 
         total_supply_atom = v_total_supply,
@@ -35,8 +43,61 @@ BEGIN
 END;
 $$;
 
--- 2. Updated Settlement: Settle Mining Rewards (Hourly Distribution)
--- This version adds a call to rpc_recalculate_global_stats() at the end.
+-- 3. Hardened: Submit Mining Share (Replay Protected)
+CREATE OR REPLACE FUNCTION rpc_submit_mining_share(
+    p_user_address TEXT,
+    p_job_id UUID,
+    p_nonce TEXT,
+    p_hash TEXT
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_seed TEXT;
+    v_target TEXT;
+    v_calculated_hash TEXT;
+    v_job_active BOOLEAN;
+    v_user_bytea BYTEA;
+BEGIN
+    -- [A] Standardization & Pre-checks
+    v_user_bytea := decode(replace(lower(p_user_address), '0x', ''), 'hex');
+    
+    -- [B] Replay Protection: Check if nonce was already submitted for this job
+    IF EXISTS (SELECT 1 FROM sovereign_mining_nonces WHERE job_id = p_job_id AND nonce = p_nonce) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Security Alert: Nonce already submitted for this job.');
+    END IF;
+
+    -- [C] Fetch Job Details
+    SELECT seed, difficulty_target, is_active INTO v_seed, v_target, v_job_active
+    FROM sovereign_mining_jobs WHERE id = p_job_id;
+    
+    IF NOT COALESCE(v_job_active, false) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Job expired or inactive');
+    END IF;
+    
+    -- [D] Validate Hash (Enforce lower() consistency for address string)
+    v_calculated_hash := encode(digest(v_seed || lower(p_user_address) || p_nonce, 'sha256'), 'hex');
+    
+    IF v_calculated_hash <> lower(p_hash) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Invalid hash calculation');
+    END IF;
+    
+    IF v_calculated_hash > v_target THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Hash does not meet difficulty target');
+    END IF;
+    
+    -- [E] Record Nonce (Atomic Lock) & Update Share
+    INSERT INTO sovereign_mining_nonces (job_id, nonce) VALUES (p_job_id, p_nonce);
+    
+    UPDATE profiles 
+    SET mining_shares = mining_shares + 1 
+    WHERE address = v_user_bytea;
+    
+    RETURN jsonb_build_object('success', true, 'new_shares', (SELECT mining_shares FROM profiles WHERE address = v_user_bytea));
+EXCEPTION WHEN unique_violation THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Race Condition: Nonce accepted by another node.');
+END;
+$$;
+
+-- 4. Hardened: Settle Mining Rewards (Access Controlled)
 CREATE OR REPLACE FUNCTION rpc_settle_mining_rewards()
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
@@ -44,34 +105,27 @@ DECLARE
     v_pool_amount NUMERIC;
     v_reward_per_share NUMERIC;
     v_settled_count INTEGER := 0;
+    v_old_job_id UUID;
 BEGIN
-    -- [A] Calculate Total Shares
+    -- [A] Access Control: Only Service Role (Cloud Distributor) can settle rewards
+    IF auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Security Violation: Manual settlement blocked. Access restricted to Cloud Distributor.';
+    END IF;
+
+    -- [B] Calculate Total Shares
     SELECT SUM(mining_shares) INTO v_total_shares FROM profiles WHERE mining_shares > 0;
     
     IF v_total_shares IS NULL OR v_total_shares = 0 THEN
-        -- Still update stats even if no shares, just in case pulse needs refreshing
         PERFORM rpc_recalculate_global_stats();
-        RETURN jsonb_build_object('success', true, 'message', 'No shares to settle. Stats synchronized.');
+        RETURN jsonb_build_object('success', true, 'message', 'No shares to settle. Network stats synchronized.');
     END IF;
     
-    -- [B] Get Hourly Pool (Daily Pool / 24)
+    -- [C] Get Hourly Pool
     SELECT (mining_pool_atom_daily / 24) INTO v_pool_amount FROM sovereign_stats WHERE id = 'global';
-    
     v_reward_per_share := v_pool_amount / v_total_shares;
     
-    -- [C] Distribute & Reset (Atomic Sharded Batch)
-    -- We do this in two steps: 
-    -- 1. Log to Transactions (Activity Feed)
-    INSERT INTO transactions (
-        tx_hash,
-        from_address,
-        to_address,
-        amount,
-        tx_type,
-        signature,
-        status,
-        created_at
-    )
+    -- [D] Distribute & Log to Activity Feed
+    INSERT INTO transactions (tx_hash, from_address, to_address, amount, tx_type, signature, status, created_at)
     SELECT 
         'reward-' || encode(digest(p.address::text || now()::text || random()::text, 'sha256'), 'hex'),
         'System',
@@ -81,10 +135,9 @@ BEGIN
         'Protocol Consensus',
         'completed',
         NOW()
-    FROM profiles p
-    WHERE p.mining_shares > 0;
+    FROM profiles p WHERE p.mining_shares > 0;
 
-    -- 2. Update Balances
+    -- Update Liquid Balances
     UPDATE profiles 
     SET 
         balance_atom = balance_atom + (mining_shares * v_reward_per_share),
@@ -94,15 +147,20 @@ BEGIN
     
     GET DIAGNOSTICS v_settled_count = ROW_COUNT;
     
-    -- [D] Rotate Seed for next epoch
+    -- [E] Rotate Seed
+    SELECT id INTO v_old_job_id FROM sovereign_mining_jobs WHERE is_active = true ORDER BY created_at DESC LIMIT 1;
     UPDATE sovereign_mining_jobs SET is_active = false WHERE is_active = true;
+    
     INSERT INTO sovereign_mining_jobs (seed, difficulty_target)
     VALUES (
         encode(digest(now()::text || random()::text, 'sha256'), 'hex'),
         (SELECT difficulty_target FROM sovereign_stats WHERE id = 'global')
     );
     
-    -- [E] SMART STATS: Sync total supply after minting new coins
+    -- [F] Cleanup: Remove nonces from previous jobs to save space
+    DELETE FROM sovereign_mining_nonces WHERE job_id = v_old_job_id;
+    
+    -- [G] Global Synchronization
     PERFORM rpc_recalculate_global_stats();
     
     RETURN jsonb_build_object(
@@ -113,12 +171,9 @@ BEGIN
 END;
 $$;
 
--- 3. Initialize/Update Stats Reference Data
+-- 5. Initial Synchronization
 INSERT INTO sovereign_stats (id, total_supply_atom, daily_mined_atom)
 VALUES ('global', 0, 2000000000000000000)
-ON CONFLICT (id) DO UPDATE SET
-    daily_mined_atom = EXCLUDED.daily_mined_atom;
+ON CONFLICT (id) DO UPDATE SET daily_mined_atom = EXCLUDED.daily_mined_atom;
 
--- 4. Initial Synchronization
--- Run once to populate the 0.0 values with actual data from current profiles (if any exist).
 SELECT rpc_recalculate_global_stats();
