@@ -30,7 +30,10 @@ CREATE TABLE IF NOT EXISTS sovereign_mining_jobs (
 CREATE INDEX IF NOT EXISTS idx_mining_jobs_active ON sovereign_mining_jobs(is_active) WHERE is_active = true;
 
 -- 4. RPC: Get Current Mining Job
-CREATE OR REPLACE FUNCTION rpc_get_mining_job()
+DROP FUNCTION IF EXISTS rpc_get_mining_job();
+DROP FUNCTION IF EXISTS rpc_get_mining_job(text);
+
+CREATE OR REPLACE FUNCTION rpc_get_mining_job(p_user_address TEXT)
 RETURNS TABLE (
     job_id UUID,
     seed TEXT,
@@ -38,11 +41,10 @@ RETURNS TABLE (
     user_shares BIGINT
 ) LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-    v_user_address TEXT;
+    v_user_bytea BYTEA;
 BEGIN
-    v_user_address := auth.jwt() ->> 'sub'; -- Usually UUID in Supabase Auth, but we use wallet address. 
-    -- Note: If using Custom Wallet Identity, we might need a different way to identify the user.
-    -- For now, we assume the caller provides their address in the RPC or it's inferred from session.
+    -- Safe Hex Parsing
+    v_user_bytea := decode(replace(lower(p_user_address), '0x', ''), 'hex');
     
     RETURN QUERY
     SELECT 
@@ -51,7 +53,7 @@ BEGIN
         j.difficulty_target,
         COALESCE(p.mining_shares, 0)
     FROM sovereign_mining_jobs j
-    LEFT JOIN profiles p ON p.address = (SELECT address FROM profiles WHERE id::text = v_user_address LIMIT 1) -- Adjustment for sharding
+    LEFT JOIN profiles p ON p.address = v_user_bytea
     WHERE j.is_active = true
     ORDER BY j.created_at DESC
     LIMIT 1;

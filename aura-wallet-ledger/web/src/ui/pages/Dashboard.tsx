@@ -319,7 +319,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   // 🛡️ Sovereign Miner: Hardware Logic
   const fetchMiningJob = async () => {
     try {
-      const { data, error } = await supabase.rpc('rpc_get_mining_job');
+      const { data, error } = await supabase.rpc('rpc_get_mining_job', {
+        p_user_address: wallet.address.toLowerCase()
+      });
       if (error) throw error;
       const job = Array.isArray(data) ? data[0] : data;
       setMiningJob(job);
@@ -371,20 +373,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
             setMiningPulse(p => p + 1);
           } else if (type === 'solution') {
             submitShare(data.nonce, data.hash, data.jobId);
+          } else if (type === 'error') {
+            addLog(`❌ Cluster Error: ${data.message}`);
           }
+        };
+        minerWorkerRef.current.onerror = (err) => {
+          console.error("Worker Engine Failure:", err);
+          addLog("❌ Critical: Compute Cluster Engine Crash.");
+          setIsMining(false);
         };
       }
 
-      if (miningJob) {
+      // Authoritative Job Sync: Use fresh job if state is stale
+      const latestJob = miningJob || (await supabase.rpc('rpc_get_mining_job', { p_user_address: wallet.address.toLowerCase() })).data?.[0];
+      
+      if (latestJob) {
         minerWorkerRef.current.postMessage({
           type: 'start',
           data: {
-            seed: miningJob.seed,
-            difficultyTarget: miningJob.difficulty_target,
+            seed: latestJob.seed || latestJob.job_seed,
+            difficultyTarget: latestJob.difficulty_target,
             walletAddress: wallet.address.toLowerCase(),
-            jobId: miningJob.job_id
+            jobId: latestJob.job_id || latestJob.id
           }
         });
+        addLog(`⚡ Sovereign Compute Cluster Ignited.`);
+      } else {
+        addLog(`⚠️ System Warning: No active mining mission identified.`);
+        setIsMining(false);
       }
     }
   };
