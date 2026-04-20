@@ -71,7 +71,11 @@ DECLARE
     v_target TEXT;
     v_calculated_hash TEXT;
     v_job_active BOOLEAN;
+    v_user_bytea BYTEA;
 BEGIN
+    -- 0. Standardize Address
+    v_user_bytea := decode(replace(lower(p_user_address), '0x', ''), 'hex');
+
     -- 1. Fetch Job Details
     SELECT seed, difficulty_target, is_active INTO v_seed, v_target, v_job_active
     FROM sovereign_mining_jobs WHERE id = p_job_id;
@@ -81,11 +85,8 @@ BEGIN
     END IF;
     
     -- 2. Validate Hash (Server-side check)
-    -- In a real production environment, we'd use a postgres extension for sha256 
-    -- if speed is critical, or just trust the pre-calculated hash if we add signature verification.
-    -- For Aura Sovereign, we bind the share to the user address.
-    
-    -- Logic: sha256(seed + user_address + nonce)
+    -- Logic: sha256(seed + p_user_address + nonce) 
+    -- Note: We use the raw text p_user_address as passed (consistent with worker)
     v_calculated_hash := encode(digest(v_seed || p_user_address || p_nonce, 'sha256'), 'hex');
     
     IF v_calculated_hash <> p_hash THEN
@@ -99,9 +100,9 @@ BEGIN
     -- 3. Record Share (Atomic update)
     UPDATE profiles 
     SET mining_shares = mining_shares + 1 
-    WHERE address = p_user_address;
+    WHERE address = v_user_bytea;
     
-    RETURN jsonb_build_object('success', true, 'new_shares', (SELECT mining_shares FROM profiles WHERE address = p_user_address));
+    RETURN jsonb_build_object('success', true, 'new_shares', (SELECT mining_shares FROM profiles WHERE address = v_user_bytea));
 END;
 $$;
 
