@@ -1,35 +1,44 @@
-# Aura Sovereign Tokenomics (v3.0) 💎🛰️
+# Aura Sovereign Tokenomics (v3.1) 💎🛰️
 
-Aura (AUR) is an autonomous, high-scarcity ecosystem designed to reward network security and long-term capital commitment through its **Proof of Stake (PoS)** model.
+Aura (AUR) is an autonomous, high-scarcity ecosystem designed to reward both capital commitment and computational effort through its **Hybrid Consensus** model.
 
 ## 1. Daily Mint Rate & Scarcity
 Aura is designed with extreme scarcity to ensure long-term value preservation.
-- **Total Rewards**: Exactly **1.0 AUR** is minted per 24-hour cycle.
-- **Distribution Frequency**: Every UTC midnight, the `daily-distributor` atomicaly calculates and distributes the reward.
-
-## 2. Distribution Model: 100% Staking Rewards
-Starting from v3.0, Aura has transitioned to a pure **Staking-First** economy. This rewards users who provide the most significant security to the protocol by locking their assets.
-
-### A. Proof of Stake (PoS)
-- **Eligibility**: Any user with a non-zero `staked_balance` in the L3 Sovereign Vault.
-- **Reward Allocation**: 100% of the daily 1.0 AUR is distributed proportionally among all stakers.
-- **The Formula**:
-  $$ Reward_{user} = \frac{Stake_{user}}{TotalStake_{global}} \times 1.0 AUR $$
-
-### B. Fair Participation
-There are no "whales-only" tiers. Every single "wei" of AUR staked contributes to your proportional share of the daily rewards.
-
-## 3. The 1% Burn Rule (Deflationary Mechanism)
-Every transfer or staking operation on the Aura network carries a mandatory **1% Burn Penalty**. 
-- **Deflationary Pressure**: Tokens burned are permanently removed from circulation.
-- **Scarcity Driver**: As network activity increases, the total supply of AUR naturally decreases, making each remaining token more valuable.
-
-## 4. Auto-Compounding & Liquidity
-- **Auto-Compounding**: Rewards of the day are added to your balance, which can be immediately staked to increase your share for the next day.
-- **Instant Unstaking**: Aura values sovereignty. You can unstake your assets at any time without mandatory lock-up periods, though doing so will decrease your reward share for the following cycle.
-
-## 5. Sovereign Security
-All transaction settlement and reward distribution are handled via **Atomic RPC functions** in the Sovereign Cloud, verified by ECDSA signatures, and audited on the public GitHub ledger.
+- **Total Rewards**: Exactly **2.0 AUR** is minted per 24-hour cycle.
+- **Distribution Frequency**: 
+    - **Staking**: Distributed every UTC midnight.
+    - **Mining**: Settled hourly based on accumulated shares.
 
 ---
-**"Scarcity is the foundation of digital sovereignty."**
+
+## 2. Yield Layers: The Dual-Incentive Model
+
+### A. Proof of Stake (PoS) - Staking Rewards
+- **Allocation**: **1.0 AUR** per day.
+- **Eligibility**: Any user with a non-zero `staked_balance` in the Sovereign Vault.
+- **Formula**:
+  $$ Reward_{stake\_user} = \frac{Stake_{user}}{TotalStake_{global}} \times 1.0 AUR $$
+
+### B. Proof of Effort (PoW) - Mining Rewards
+- **Allocation**: **1.0 AUR** per day.
+- **Eligibility**: Any user contributing computational effort via the Sovereign Miner.
+- **Formula**:
+  $$ Reward_{mine\_user} = \frac{Shares_{user}}{TotalShares_{global}} \times 1.0 AUR $$
+
+---
+
+## 3. The 1% Burn Rule (Deflationary Mechanism)
+Every transfer, staking, or unstaking operation on the Aura network carries a mandatory **1% Burn Penalty**. 
+- **Deflationary Pressure**: Tokens burned are permanently removed from the ledger.
+- **Scarcity Driver**: As network utility and activity increase, the total supply of AUR naturally decreases, counteracting the daily emission.
+
+---
+
+## 4. Sovereignty & Liquidity
+- **Auto-Compounding**: Mining rewards are settled hourly into your liquid balance, allowing for immediate staking to increase your share of the PoS pool.
+- **Zero Lock-up**: Aura values absolute control. You can unstake or transfer your assets at any time without mandatory cooling periods.
+- **Atomic Settlement**: All distributions are handled via SQL-native RPC functions, ensuring mathematical precision and immunity to partial settlements.
+
+---
+**"Sovereignty is earned through effort and secured by capital."**
+*Aura Core Tokenomics Protocol*
