@@ -363,7 +363,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       await fetchMiningJob();
       
       if (!minerWorkerRef.current) {
-        minerWorkerRef.current = new Worker(new URL('../lib/miner.worker.ts', import.meta.url), { type: 'module' });
+        minerWorkerRef.current = new Worker(new URL('../../lib/miner.worker.ts', import.meta.url), { type: 'module' });
         minerWorkerRef.current.onmessage = (e) => {
           const { type, data } = e.data;
           if (type === 'stats') {
@@ -892,8 +892,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                Claim Sovereign Rewards
              </button>
           </div>
-          </div>
-
           {/* Aura Sovereign Miner (The Computational Vault) */}
           <div className={`lg:col-span-3 glass-panel p-6 rounded-3xl relative overflow-hidden group border transition-all duration-700 ${isMining ? 'border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.15)] scale-[1.02]' : 'border-cyan-500/20'}`}>
             <div className={`absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl rounded-full transition-opacity duration-1000 ${isMining ? 'opacity-100 animate-pulse' : 'opacity-20'}`} />
