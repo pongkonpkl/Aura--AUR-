@@ -36,6 +36,22 @@ def run_distribution():
         print(f"Error during RPC call: {e}")
         exit(1)
 
+def run_mining_settlement():
+    print(f"[{datetime.now()}] Triggering mining reward settlement...")
+    try:
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_mining_rewards",
+            headers=get_headers()
+        )
+        if resp.status_code == 200:
+            result = resp.json()
+            print(f"Successfully settled mining rewards: {result}")
+            return result
+        else:
+            print(f"Failed to trigger mining settlement HTTP {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"Error during mining settlement RPC: {e}")
+
 def sync_ledger():
     print(f"[{datetime.now()}] Synchronizing local ledger with cloud state...")
     try:
@@ -143,7 +159,10 @@ if __name__ == "__main__":
     # 1. Distribute rewards (The "Pulse")
     run_distribution()
 
-    # 2. Update Global Monitor Metrics
+    # 2. Settle Mining Rewards (The "Effort")
+    run_mining_settlement()
+
+    # 3. Update Global Monitor Metrics
     update_global_stats()
 
     # 3. Synchronize Historical Backup (ledger.json)

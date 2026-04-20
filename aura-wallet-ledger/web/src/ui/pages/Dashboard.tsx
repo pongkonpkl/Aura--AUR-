@@ -117,6 +117,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
   const [pendingRewardAtom, setPendingRewardAtom] = useState<string>("0");
   const [optimisticReward, setOptimisticReward] = useState<bigint>(0n);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isMining, setIsMining] = useState(false);
+  const [hashRate, setHashRate] = useState(0);
+  const [sessionShares, setSessionShares] = useState(0);
+  const [totalShares, setTotalShares] = useState(0);
+  const [miningJob, setMiningJob] = useState<any>(null);
+  const minerWorkerRef = useRef<Worker | null>(null);
+  const [miningPulse, setMiningPulse] = useState(0);
 
   const LOCAL_ENGINE_URL = "http://localhost:8000";
   const REPO_RAW_BASE = "https://raw.githubusercontent.com/pongkonpkl/Aura--AUR-/l3-framework-v1";
@@ -305,8 +312,82 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
       clearInterval(syncInterval);
       clearInterval(heartbeatInterval);
       clearInterval(optimisticInterval);
+      if (minerWorkerRef.current) minerWorkerRef.current.terminate();
     };
   }, [wallet, pendingTxs]);
+
+  // 🛡️ Sovereign Miner: Hardware Logic
+  const fetchMiningJob = async () => {
+    try {
+      const { data, error } = await supabase.rpc('rpc_get_mining_job');
+      if (error) throw error;
+      const job = Array.isArray(data) ? data[0] : data;
+      setMiningJob(job);
+      setTotalShares(job?.user_shares || 0);
+    } catch (e) {
+      console.error("Mining Sync Error:", e);
+    }
+  };
+
+  const submitShare = async (nonce: string, hash: string, jobId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('rpc_submit_mining_share', {
+        p_user_address: wallet.address.toLowerCase(),
+        p_job_id: jobId,
+        p_nonce: nonce,
+        p_hash: hash
+      });
+      if (error) throw error;
+      if (data.success) {
+        setSessionShares(prev => prev + 1);
+        setTotalShares(data.new_shares);
+        addLog(`🏆 Share Accepted: Cluster solved unit at nonce ${nonce.slice(-6)}`);
+      }
+    } catch (e) {
+      console.error("Share Submission Error:", e);
+    }
+  };
+
+  const toggleMining = async () => {
+    if (isMining) {
+      // Halt Cluster
+      minerWorkerRef.current?.postMessage({ type: 'stop' });
+      setIsMining(false);
+      setHashRate(0);
+      addLog("🛑 Computational Cluster Halted.");
+    } else {
+      // Ignite Cluster
+      setIsMining(true);
+      addLog("⚡ Igniting Sovereign Compute Cluster...");
+      
+      await fetchMiningJob();
+      
+      if (!minerWorkerRef.current) {
+        minerWorkerRef.current = new Worker(new URL('../lib/miner.worker.ts', import.meta.url), { type: 'module' });
+        minerWorkerRef.current.onmessage = (e) => {
+          const { type, data } = e.data;
+          if (type === 'stats') {
+            setHashRate(data.hashRate);
+            setMiningPulse(p => p + 1);
+          } else if (type === 'solution') {
+            submitShare(data.nonce, data.hash, data.jobId);
+          }
+        };
+      }
+
+      if (miningJob) {
+        minerWorkerRef.current.postMessage({
+          type: 'start',
+          data: {
+            seed: miningJob.seed,
+            difficultyTarget: miningJob.difficulty_target,
+            walletAddress: wallet.address.toLowerCase(),
+            jobId: miningJob.job_id
+          }
+        });
+      }
+    }
+  };
 
   // 🕵️ Smart Address Verification System (Anti-Loss Protocol)
   useEffect(() => {
@@ -811,9 +892,84 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onDisconnect, wallet })
                Claim Sovereign Rewards
              </button>
           </div>
+          </div>
 
-          {/* Peer Telemetry Stream - Moved here for Balance (60% width) */}
-          <div className="lg:col-span-6 glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
+          {/* Aura Sovereign Miner (The Computational Vault) */}
+          <div className={`lg:col-span-3 glass-panel p-6 rounded-3xl relative overflow-hidden group border transition-all duration-700 ${isMining ? 'border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.15)] scale-[1.02]' : 'border-cyan-500/20'}`}>
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-3xl rounded-full transition-opacity duration-1000 ${isMining ? 'opacity-100 animate-pulse' : 'opacity-20'}`} />
+            
+            <div className="flex justify-between items-start mb-6">
+               <div className="flex items-center gap-3">
+                 <div className={`p-2 rounded-lg transition-all duration-500 ${isMining ? 'bg-cyan-500/20 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.4)]' : 'bg-white/5 text-white/20'}`}>
+                   <Cpu size={20} className={isMining ? 'animate-spin' : ''} />
+                 </div>
+                 <div>
+                   <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Sovereign Miner</span>
+                   <div className="flex items-center gap-2">
+                      <span className={`text-[8px] px-1.5 py-0.5 rounded uppercase font-black ${isMining ? 'bg-cyan-500 text-black animate-pulse' : 'bg-white/5 text-white/40'}`}>
+                        {isMining ? 'Active Cluster' : 'Standby'}
+                      </span>
+                   </div>
+                 </div>
+               </div>
+               <div className="text-right">
+                  <p className={`text-xl font-mono font-bold tracking-tighter ${isMining ? 'text-cyan-400' : 'text-white/20'}`}>
+                    {hashRate.toLocaleString()} <span className="text-[10px] opacity-40">H/s</span>
+                  </p>
+                  <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">Hash Intensity</p>
+               </div>
+            </div>
+
+            {/* HUD Experience: Moving Data Stream */}
+            <div className="relative h-24 bg-black/40 rounded-2xl border border-white/5 mb-6 overflow-hidden flex items-center justify-center">
+               <div className="absolute inset-0 opacity-10 flex flex-wrap gap-2 p-2 pointer-events-none">
+                  {Array.from({length: 40}).map((_, i) => (
+                    <span key={i} className="text-[8px] font-mono text-cyan-500 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+                      {Math.random().toString(16).slice(2, 6).toUpperCase()}
+                    </span>
+                  ))}
+               </div>
+               <div className="relative z-10 text-center">
+                  <div className="flex items-baseline justify-center gap-1">
+                    <p className={`text-3xl font-black tracking-widest ${isMining ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'text-white/10'}`}>
+                      {totalShares.toString().padStart(4, '0')}
+                    </p>
+                    <span className="text-[10px] font-black text-cyan-400/60 uppercase tracking-widest ml-1">Shares</span>
+                  </div>
+                  <p className="text-[9px] font-bold text-white/20 uppercase tracking-[0.3em] mt-1">Proof of Effort Ledger</p>
+               </div>
+               
+               {/* Cyan Aura Pulse Overlay */}
+               {isMining && (
+                 <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-shimmer" />
+               )}
+            </div>
+
+            <div className="flex gap-3">
+               <button 
+                onClick={toggleMining}
+                className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-500 flex items-center justify-center gap-2 ${
+                  isMining 
+                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20' 
+                  : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/20'
+                }`}
+               >
+                 {isMining ? <><Power size={14} /> Halt Cluster</> : <><Zap size={14} /> Ignite Cluster</>}
+               </button>
+            </div>
+
+            <div className="mt-4 flex justify-between items-center px-1">
+               <div className="flex gap-1">
+                 {Array.from({length: 8}).map((_, i) => (
+                   <div key={i} className={`w-1 h-3 rounded-full transition-all duration-500 ${isMining && (miningPulse % 8) === i ? 'bg-cyan-400 glow-cyan' : 'bg-white/5'}`} />
+                 ))}
+               </div>
+               <p className="text-[8px] font-black text-white/20 uppercase tracking-tighter">Cluster Health: 100% Opt. Performance</p>
+            </div>
+          </div>
+
+          {/* Peer Telemetry Stream - Moved here for Balance (30% width) */}
+          <div className="lg:col-span-3 glass-panel rounded-3xl overflow-hidden border-white/5 flex flex-col">
             <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-3">
                 <TerminalIcon size={16} className="text-indigo-400" />
