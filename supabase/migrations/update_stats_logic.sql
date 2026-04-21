@@ -154,7 +154,7 @@ BEGIN
     INSERT INTO sovereign_mining_jobs (seed, difficulty_target)
     VALUES (
         encode(digest(now()::text || random()::text, 'sha256'), 'hex'),
-        (SELECT difficulty_target FROM sovereign_stats WHERE id = 'global')
+        (SELECT mining_difficulty_target FROM sovereign_stats WHERE id = 'global')
     );
     
     -- [F] Cleanup: Remove nonces from previous jobs to save space
