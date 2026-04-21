@@ -27,8 +27,13 @@ def run_distribution():
             print("Successfully triggered distribution RPC.")
             return resp.json()
         elif resp.status_code == 200 and resp.json().get('success') is False:
-             print(f"RPC returned error: {resp.text}")
-             exit(1)
+             msg = resp.json().get('message', '')
+             if "No active stakers found." in msg:
+                 print(f"Skipping staking distribution: {msg}")
+                 return resp.json()
+             else:
+                 print(f"RPC returned error: {resp.text}")
+                 exit(1)
         else:
             print(f"Failed to trigger distribution HTTP {resp.status_code}: {resp.text}")
             exit(1)
