@@ -213,7 +213,7 @@ def process_transaction(payload_src):
                 "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
                 "p_tx_hash_id": db_id or tx_hash_id # Use UUID if available to avoid cast errors
             }
-            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer", headers=headers, json=rpc_payload)
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_transfer_v3", headers=headers, json=rpc_payload)
             
         elif op in ["stake", "unstake"]:
             rpc_payload = {
@@ -221,7 +221,7 @@ def process_transaction(payload_src):
                 "p_amount_atom": amount_atom, "p_nonce": signed_nonce or expected_nonce,
                 "p_tx_hash_id": db_id or tx_hash_id
             }
-            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking", headers=headers, json=rpc_payload)
+            resp = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/rpc_settle_staking_v3", headers=headers, json=rpc_payload)
 
         elif op == "withdraw":
             rpc_payload = {
