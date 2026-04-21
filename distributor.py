@@ -53,9 +53,12 @@ def run_mining_settlement():
             print(f"Successfully settled mining rewards: {result}")
             return result
         else:
-            print(f"Failed to trigger mining settlement HTTP {resp.status_code}: {resp.text}")
+            print(f"CRITICAL ERROR: Failed to trigger mining settlement HTTP {resp.status_code}: {resp.text}")
+            # In Production, we exit to avoid 'Silent Success' in GitHub Actions
+            exit(1)
     except Exception as e:
-        print(f"Error during mining settlement RPC: {e}")
+        print(f"UNEXPECTED ERROR during mining settlement RPC: {e}")
+        exit(1)
 
 def sync_ledger():
     print(f"[{datetime.now()}] Synchronizing local ledger with cloud state...")
