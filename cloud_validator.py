@@ -152,7 +152,14 @@ def process_transaction(payload_src):
         elif op == "claim":
             message_variants.append(f"{prefix}AUR_CLAIM:{signed_nonce}:{from_address}")
         
-        # V2 Consensus Protocol: Pipe-Separated Strict Formatting
+        # V3 Consensus Protocol: Pipe-Separated Full Specification (Dashboard V3)
+        v3_op = op.upper()
+        v3_to = tx.get("to_address", "").lower() if op == "transfer" else ""
+        v3_amt = str(amount_atom) if op != "claim" else ""
+        msg_v3 = f"[AURA|V3]|{v3_op}|{signed_nonce}|{from_address}|{v3_to}|{v3_amt}"
+        message_variants.append(msg_v3)
+        
+        # V2 Consensus Protocol: Legacy compatibility
         v2_op = op.upper()
         v2_to = tx.get("to_address", "").lower() if op == "transfer" else ""
         v2_amt = str(amount_atom) if op != "claim" else ""
