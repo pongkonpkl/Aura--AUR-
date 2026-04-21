@@ -2,9 +2,12 @@
 -- Version: 1.3.0
 -- Description: Implements atomic staking settlement and secure P2P transfers.
 
--- 0. Cleanup
+-- 0. Deep Cleanup: Remove all possible legacy conflict variants
 DROP FUNCTION IF EXISTS rpc_settle_staking(text, text, numeric, bigint, uuid);
+DROP FUNCTION IF EXISTS rpc_settle_staking(text, text, text, integer, uuid);
+DROP FUNCTION IF EXISTS rpc_settle_staking(text, text, numeric, bigint, text);
 DROP FUNCTION IF EXISTS rpc_settle_transfer(text, text, numeric, bigint, uuid);
+DROP FUNCTION IF EXISTS rpc_settle_transfer(text, text, text, integer, uuid);
 
 -- 1. Atomic Staking Settlement
 CREATE OR REPLACE FUNCTION rpc_settle_staking(
@@ -63,7 +66,10 @@ BEGIN
     END IF;
 
     -- [D] Record Final Status
-    UPDATE transactions SET status = 'success' WHERE id = p_tx_hash_id OR tx_hash = p_tx_hash_id::text;
+    -- Flexible lookup: Match by either UUID id or text tx_hash to ensure success update
+    UPDATE transactions 
+    SET status = 'success' 
+    WHERE id = p_tx_hash_id OR tx_hash = p_tx_hash_id::text;
 
     RETURN jsonb_build_object('success', true, 'new_balance', v_current_balance, 'new_staked', v_current_staked);
 END;
