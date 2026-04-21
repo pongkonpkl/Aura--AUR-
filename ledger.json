@@ -102,12 +102,12 @@
     }
   ],
   "total_staked": "11658771428571428560",
-  "last_sync": "2026-04-21T03:48:41.982868",
+  "last_sync": "2026-04-21T04:06:54.776864",
   "balances_atom": {
-    "\\xe34d5a2ef87a86787ffabdcb29dab176967162f0": "0",
-    "\\x3d825a9c1d95f5ecddef1710346791bee4c73711": "0",
+    "\\xe34d5a2ef87a86787ffabdcb29dab176967162f0": "2136752136752136.8",
+    "\\x3d825a9c1d95f5ecddef1710346791bee4c73711": "3.89957264957265e+16",
     "\\x0aa81e8daf1ef9e9a2a62b043bfe9323b71bf253": "0",
-    "\\xf73729d5bcb3a9d3fc43e7ac6987088d1011d9ff": "0"
+    "\\xf73729d5bcb3a9d3fc43e7ac6987088d1011d9ff": "534188034188034.2"
   },
   "staked_balances_atom": {
     "\\xe34d5a2ef87a86787ffabdcb29dab176967162f0": "0",
@@ -115,6 +115,6 @@
     "\\x0aa81e8daf1ef9e9a2a62b043bfe9323b71bf253": "0",
     "\\xf73729d5bcb3a9d3fc43e7ac6987088d1011d9ff": "0"
   },
-  "total_supply_atom": "0",
+  "total_supply_atom": "41666666666666671.0",
   "total_staked_atom": "0"
 }
